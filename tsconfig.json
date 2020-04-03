@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+      "module": "commonjs",
+      "target": "es2018",
+      "allowSyntheticDefaultImports": true,
+      "noImplicitAny": true,
+      "strictNullChecks": true,
+      "moduleResolution": "node",
+      "allowJs": true,
+      "checkJs": true,
+      "noEmit": true,
+      "typeRoots": ["types", "node_modules/@types"]
+  },
+  "exclude": ["types"]
+}

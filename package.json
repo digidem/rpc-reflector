@@ -1,0 +1,27 @@
+{
+  "name": "rpc-reflector",
+  "version": "1.0.0",
+  "description": "Call methods on an object over RPC",
+  "main": "index.js",
+  "scripts": {
+    "test": "tap",
+    "type": "tsc"
+  },
+  "author": "Gregor MacLennan",
+  "license": "ISC",
+  "dependencies": {
+    "concat-stream": "^2.0.0",
+    "is-stream": "^2.0.0",
+    "once": "^1.4.0",
+    "serialize-error": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/concat-stream": "^1.6.0",
+    "@types/node": "^13.9.8",
+    "@types/once": "^1.4.0",
+    "@types/tape": "^4.2.34",
+    "tap": "^14.10.7",
+    "tape": "^4.13.2",
+    "typescript": "^3.8.3"
+  }
+}

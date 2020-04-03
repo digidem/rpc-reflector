@@ -1,0 +1,154 @@
+const EventEmitter = require('events').EventEmitter
+const assert = require('assert')
+const { deserializeError } = require('serialize-error')
+
+const { msgType } = require('./lib/constants')
+const isValidMessage = require('./lib/validate-message')
+
+/** @typedef {import("./lib/types").MsgRequest} MsgRequest */
+/** @typedef {import("./lib/types").MsgResponse} MsgResponse */
+/** @typedef {import("./lib/types").MsgOn} MsgOn */
+/** @typedef {import("./lib/types").MsgOff} MsgOff */
+/** @typedef {import("./lib/types").MsgEmit} MsgEmit */
+/** @typedef {import("./lib/types").Message} Message */
+
+const emitterSubscribeMethods = [
+  'addListener',
+  'on',
+  'prependListener',
+  'once',
+  'prependOnceListener'
+]
+const emitterUnsubscribeMethods = ['removeListener', 'off']
+const closeProp = Symbol('close')
+
+module.exports = CreateClient
+
+/**
+ * @public
+ * Create an RPC client that will relay any method that is called via `send`. It
+ * listens to replies from the server via `receiver`.
+ *
+ * @param {(msg: MsgRequest | MsgOn | MsgOff) => void} send Function that will be called with a
+ * message to be sent over transport
+ * @param {EventEmitter} receiver An event emitter that should emit a 'message'
+ * event whenever a message is received to be processed
+ *
+ * @returns {{[method: string]: (...args: any[]) => any}}
+ */
+function CreateClient (send, receiver) {
+  assert(typeof send === 'function', 'Missing send function.')
+  assert(receiver instanceof EventEmitter, 'Receiver must be an event emitter')
+  let id = 0
+  /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
+  const pending = new Map()
+  const emitter = new EventEmitter()
+
+  receiver.on('message', handleMessage)
+
+  /**
+   * Handles an incoming message.
+   * @param {any} msg Can be any type, but we only process messages types that
+   * we understand, other messages are ignored
+   */
+  function handleMessage (msg) {
+    if (!Array.isArray(msg)) {
+      return console.warn(`Received invalid message, is something else sending events on the same channel?
+Message: ${msg}
+(Message was ignored)`)
+    }
+    switch (msg[0]) {
+      case msgType.RESPONSE:
+        handleResponse(msg)
+        break
+      case msgType.EMIT:
+        handleEmit(msg)
+        break
+      default:
+        console.warn(
+          `Received invalid message type: ${msg[0]}. (Message was ignored)`
+        )
+    }
+  }
+
+  /** @param {any[]} msg */
+  function handleResponse (msg) {
+    if (!isValidMessage(msg)) return
+    const resolveReject = pending.get(msg[1])
+    if (!resolveReject) {
+      return console.warn(
+        `Received unknown message ID: ${msg[1]}. (Message was ignored)`
+      )
+    }
+    const [, , errorObject, value] = /** @type {MsgResponse} */ (msg)
+    const [resolve, reject] = resolveReject
+
+    if (errorObject) return reject(deserializeError(errorObject))
+    resolve(value)
+  }
+
+  /** @param {any[]} msg */
+  function handleEmit (msg) {
+    if (!isValidMessage(msg)) return
+    const [, eventName, errorObject, args = []] = /** @type {MsgEmit} */ (msg)
+    if (errorObject) {
+      Reflect.apply(emitter.emit, emitter, [
+        eventName,
+        deserializeError(errorObject)
+      ])
+    } else {
+      Reflect.apply(emitter.emit, emitter, [eventName, ...args])
+    }
+    if (emitter.listenerCount(eventName) === 0) {
+      send([msgType.OFF, eventName])
+    }
+  }
+
+  function handleClose () {
+    receiver.off('message', handleMessage)
+  }
+
+  /** @type {ProxyHandler<any>} */
+  const handler = {
+    /** @type {(target: any, prop: string | number | symbol) => (...args: any[]) => any} */
+    get: (target, prop) => (...args) => {
+      if (prop === closeProp) {
+        return handleClose()
+      }
+      if (typeof prop !== 'string') {
+        throw new Error(`ReferenceError: ${String(prop)} is not defined`)
+      }
+      if (prop in target) {
+        if (emitterSubscribeMethods.includes(prop)) {
+          send([msgType.ON, args[0]])
+          return Reflect.apply(target[prop], target, args)
+        } else if (emitterUnsubscribeMethods.includes(prop)) {
+          send([msgType.OFF, args[0]])
+          return Reflect.apply(target[prop], target, args)
+        } else {
+          return Reflect.apply(target[prop], target, args)
+        }
+      } else {
+        return new Promise((resolve, reject) => {
+          const msgId = id++
+          pending.set(msgId, [resolve, reject])
+          send([msgType.REQUEST, msgId, prop, args])
+        })
+      }
+    }
+  }
+
+  const proxy = new Proxy(emitter, handler)
+
+  return proxy
+}
+
+/**
+ * Close a client. Note this is a static method on `CreateClient` and it expects
+ * a client created with `CreateClient` as its argument.
+ *
+ * @param {any} client A client created with `CreateClient`
+ */
+CreateClient.close = function close (client) {
+  return client[closeProp]()
+}
