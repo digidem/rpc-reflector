@@ -2,7 +2,6 @@ const EventEmitter = require('events').EventEmitter
 const assert = require('assert')
 const { serializeError } = require('serialize-error')
 const isStream = require('is-stream')
-const streamToPromise = require('./lib/stream-to-promise')
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
 
@@ -21,9 +20,9 @@ module.exports = CreateServer
  * matching method on `handler`, and send the reply via `send`.
  *
  * @param {{[method: string]: any}} handler Any method called on the client
- * object will be called on this object. Methods should return a JSON
- * serializable value, a readableStream, ora Promise which resolves to a JSON
- * serializable value.
+ * object will be called on this object. Methods can return a value, a Promise,
+ * or a ReadableStream. Your transport stream must be able to encode/decode any
+ * values that your handler returns
  * @param {(msg: MsgResponse | MsgEmit) => void} send Function that will be called with a
  * message to be sent over transport
  * @param {EventEmitter} receiver An event emitter that should emit a 'message'
@@ -73,7 +72,7 @@ Message: ${msg}
   async function handleRequest (msg) {
     if (!isValidMessage(msg)) return
 
-    const [, msgId, method, params = []] = /** @type {MsgRequest} */ (msg)
+    const [, msgId, method, params] = /** @type {MsgRequest} */ (msg)
     /** @type {MsgResponse} */
     let response
 
@@ -82,11 +81,11 @@ Message: ${msg}
       response = [msgType.RESPONSE, msgId, serializeError(error)]
     } else {
       try {
-        let result = await Promise.resolve(
+        const result = await Promise.resolve(
           Reflect.apply(handler[method], handler, params)
         )
         if (isStream.readable(result)) {
-          result = await streamToPromise(result)
+          return handleStream(result)
         }
         response = [msgType.RESPONSE, msgId, null, result]
       } catch (error) {
@@ -94,6 +93,20 @@ Message: ${msg}
       }
     }
     send(response)
+
+    /** @param {import('stream').Readable} stream */
+    function handleStream (stream) {
+      stream
+        .on('data', chunk => {
+          send([msgType.RESPONSE, msgId, null, chunk, true])
+        })
+        .on('error', err => {
+          send([msgType.RESPONSE, msgId, serializeError(err)])
+        })
+        .on('end', () => {
+          send([msgType.RESPONSE, msgId, null])
+        })
+    }
   }
 
   /** @param {any[]} msg */

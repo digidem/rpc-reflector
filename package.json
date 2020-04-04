@@ -10,9 +10,8 @@
   "author": "Gregor MacLennan",
   "license": "ISC",
   "dependencies": {
-    "concat-stream": "^2.0.0",
     "is-stream": "^2.0.0",
-    "once": "^1.4.0",
+    "p-timeout": "^3.2.0",
     "serialize-error": "^6.0.0"
   },
   "devDependencies": {
@@ -20,8 +19,13 @@
     "@types/node": "^13.9.8",
     "@types/once": "^1.4.0",
     "@types/tape": "^4.2.34",
+    "@types/tape-async": "^2.3.0",
+    "into-stream": "^5.1.1",
+    "p-is-promise": "^3.0.0",
+    "readable-error": "^1.0.0",
     "tap": "^14.10.7",
     "tape": "^4.13.2",
+    "tape-async": "^2.3.0",
     "typescript": "^3.8.3"
   }
 }

@@ -6,6 +6,7 @@
       "noImplicitAny": true,
       "strictNullChecks": true,
       "moduleResolution": "node",
+      "resolveJsonModule": true,
       "allowJs": true,
       "checkJs": true,
       "noEmit": true,

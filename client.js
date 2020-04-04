@@ -1,6 +1,8 @@
 const EventEmitter = require('events').EventEmitter
 const assert = require('assert')
 const { deserializeError } = require('serialize-error')
+const promiseTimeout = require('p-timeout')
+const util = require('util')
 
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
@@ -33,15 +35,18 @@ module.exports = CreateClient
  * message to be sent over transport
  * @param {EventEmitter} receiver An event emitter that should emit a 'message'
  * event whenever a message is received to be processed
+ * @param {{timeout?: number}} options Optionally set timeout (default 5000)
  *
- * @returns {{[method: string]: (...args: any[]) => any}}
+ * @returns {import("./lib/types").Client}
  */
-function CreateClient (send, receiver) {
+function CreateClient (send, receiver, { timeout = 5000 } = {}) {
   assert(typeof send === 'function', 'Missing send function.')
   assert(receiver instanceof EventEmitter, 'Receiver must be an event emitter')
   let id = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
-  const pending = new Map()
+  const pending = new Map() // Messages pending response
+  /** @type {Map<number, Array<Buffer | string | number | boolean | object>>} */
+  const collector = new Map() // Streaming responses pending return
   const emitter = new EventEmitter()
 
   receiver.on('message', handleMessage)
@@ -80,11 +85,33 @@ Message: ${msg}
         `Received unknown message ID: ${msg[1]}. (Message was ignored)`
       )
     }
-    const [, , errorObject, value] = /** @type {MsgResponse} */ (msg)
+    const [, msgId, errorObject, value, more] = /** @type {MsgResponse} */ (msg)
     const [resolve, reject] = resolveReject
 
-    if (errorObject) return reject(deserializeError(errorObject))
-    resolve(value)
+    if (errorObject) {
+      reject(deserializeError(errorObject))
+      pending.delete(msgId)
+      collector.delete(msgId)
+    } else if (more) {
+      // More data coming, so start collecting it.
+      // TODO: Support readableStream on client
+      const streamedResponse = collector.get(msgId)
+      if (streamedResponse) {
+        streamedResponse.push(value)
+      } else {
+        collector.set(msgId, [value])
+      }
+    } else {
+      const streamedResponse = collector.get(msgId)
+      if (streamedResponse) {
+        if (value != null) streamedResponse.push(value)
+        resolve(concatStreamedResponse(streamedResponse))
+        collector.delete(msgId)
+      } else {
+        resolve(value)
+      }
+      pending.delete(msgId)
+    }
   }
 
   /** @param {any[]} msg */
@@ -110,29 +137,43 @@ Message: ${msg}
 
   /** @type {ProxyHandler<any>} */
   const handler = {
-    /** @type {(target: any, prop: string | number | symbol) => (...args: any[]) => any} */
-    get: (target, prop) => (...args) => {
+    /** @type {(target: any, prop: string | number | symbol, receiver: any) => (...args: any[]) => any} */
+    get: (target, prop, receiver) => (...args) => {
       if (prop === closeProp) {
         return handleClose()
+      }
+      if (prop === util.inspect.custom) {
+        return '[RpcReflectorClient]'
       }
       if (typeof prop !== 'string') {
         throw new Error(`ReferenceError: ${String(prop)} is not defined`)
       }
       if (prop in target) {
         if (emitterSubscribeMethods.includes(prop)) {
+          Reflect.apply(target[prop], target, args)
           send([msgType.ON, args[0]])
-          return Reflect.apply(target[prop], target, args)
         } else if (emitterUnsubscribeMethods.includes(prop)) {
-          send([msgType.OFF, args[0]])
-          return Reflect.apply(target[prop], target, args)
+          Reflect.apply(target[prop], target, args)
+          if (emitter.listenerCount(args[0]) === 0) {
+            send([msgType.OFF, args[0]])
+          }
         } else {
           return Reflect.apply(target[prop], target, args)
         }
+        return receiver
       } else {
-        return new Promise((resolve, reject) => {
-          const msgId = id++
+        const msgId = id++
+
+        const pendingResult = new Promise((resolve, reject) => {
           pending.set(msgId, [resolve, reject])
           send([msgType.REQUEST, msgId, prop, args])
+        })
+
+        return promiseTimeout(pendingResult, timeout, function fallback () {
+          // Cleanup pending handlers because they will never be called now
+          pending.delete(msgId)
+          throw new Error(`Server timed out after ${timeout}ms.
+            The server could be closed or the transport is down.`)
         })
       }
     }
@@ -151,4 +192,36 @@ Message: ${msg}
  */
 CreateClient.close = function close (client) {
   return client[closeProp]()
+}
+
+/**
+ * A streamedResponse is an array of buffers, strings, or objects. For buffers
+ * or strings, concat them all, but anything else returns an array
+ *
+ * @param {Array<Buffer | string | number | boolean | object>} streamedResponse
+ * @returns {Buffer | string | Array<Buffer | string | number | boolean | object>}
+ */
+function concatStreamedResponse (streamedResponse) {
+  let type
+  let length = 0
+  for (const chunk of streamedResponse) {
+    if (Buffer.isBuffer(chunk)) {
+      type = !type || type === 'buffer' ? 'buffer' : 'object'
+      length += chunk.length
+    } else if (typeof chunk === 'string') {
+      type = !type || type === 'string' ? 'string' : 'object'
+    } else {
+      type = 'object'
+    }
+  }
+  switch (type) {
+    case 'buffer':
+      // @ts-ignore TS doesn't understand the check above
+      return Buffer.concat(streamedResponse, length)
+    case 'string':
+      return streamedResponse.join('')
+    default:
+      // @ts-ignore TS doesn't understand the check above
+      return streamedResponse
+  }
 }

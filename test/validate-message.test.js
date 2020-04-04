@@ -1,36 +1,9 @@
 const test = require('tape')
 const isValidMessage = require('../lib/validate-message')
-const { msgType } = require('../lib/constants')
 
-const validMessages = [
-  [msgType.REQUEST, 2, 'anyMethod'],
-  [msgType.REQUEST, 3, 'anyMethod', ['param2', { other: 'param' }]],
-  [msgType.RESPONSE, 4, null, 'returnedValue'],
-  [msgType.RESPONSE, 5, { message: 'Error message' }],
-  [msgType.RESPONSE, 6, null],
-  [msgType.ON, 'eventName'],
-  [msgType.OFF, 'eventName'],
-  [msgType.EMIT, 'eventName'],
-  [msgType.EMIT, 'eventName', ['param1', { other: 'param' }]]
-]
+const validMessages = require('./fixtures/valid-messages.json')
 
-const invalidMessages = [
-  [msgType.REQUEST], // Missing items
-  [msgType.REQUEST, 'stringID'], // invalid ID
-  [msgType.REQUEST, 7], // Missing method name
-  [msgType.RESPONSE],
-  [msgType.RESPONSE, 'stringID'],
-  [msgType.RESPONSE, 8, 'string'],
-  [msgType.ON],
-  [msgType.OFF],
-  [msgType.EMIT],
-  [msgType.ON, 0],
-  [msgType.OFF, 0],
-  [msgType.EMIT, 0],
-  [msgType.EMIT, 'eventName', 'notArray'],
-  [msgType.EMIT, 'eventName', false],
-  ['otherType']
-]
+const invalidMessages = require('./fixtures/invalid-messages.json')
 
 test('Valid messages return true', t => {
   for (const msg of validMessages) {
