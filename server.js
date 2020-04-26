@@ -2,8 +2,10 @@ const EventEmitter = require('events').EventEmitter
 const assert = require('assert')
 const { serializeError } = require('serialize-error')
 const isStream = require('is-stream')
+
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
+const MessageStream = require('./lib/message-stream')
 
 /** @typedef {import("./lib/types").MsgRequest} MsgRequest */
 /** @typedef {import("./lib/types").MsgResponse} MsgResponse */
@@ -23,25 +25,25 @@ module.exports = CreateServer
  * object will be called on this object. Methods can return a value, a Promise,
  * or a ReadableStream. Your transport stream must be able to encode/decode any
  * values that your handler returns
- * @param {import('stream').Duplex} stream Duplex Stream with objectMode=true
+ * @param {import('stream').Duplex} duplex Duplex Stream with objectMode=true
  *
  * @returns {{ close: () => void }} An object with a single method `close()`
  * that will stop the server listening to and sending any more messages
  */
-function CreateServer (handler, stream) {
+function CreateServer (handler, duplex) {
   assert(typeof handler === 'object', 'Missing handler object.')
-  assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
+  assert(isStream.duplex(duplex), 'Must pass a duplex stream as first argument')
 
   /** @type {Map<string, (...args: any[]) => void>} */
   let subscriptions = new Map()
 
-  stream.on('data', handleMessage)
+  duplex.on('data', handleMessage)
 
   /** @param {MsgResponse | MsgEmit} msg */
   function send (msg) {
     // TODO: Do we need back pressure here? Would just result in buffering here
     // vs. buffering in the stream, so probably no
-    stream.write(msg)
+    duplex.write(msg)
   }
 
   /**
@@ -104,16 +106,10 @@ Message: ${msg}
 
     /** @param {import('stream').Readable} stream */
     function handleStream (stream) {
-      stream
-        .on('data', chunk => {
-          send([msgType.RESPONSE, msgId, null, chunk, true])
-        })
-        .on('error', err => {
-          send([msgType.RESPONSE, msgId, serializeError(err)])
-        })
-        .on('end', () => {
-          send([msgType.RESPONSE, msgId, null])
-        })
+      // It's intentional that we do not bubble errors here. MessageStream
+      // captures any error in `stream` and sends it as a message through the
+      // duplex stream
+      stream.pipe(new MessageStream(msgId)).pipe(duplex, { end: false })
     }
   }
 
@@ -161,7 +157,7 @@ Message: ${msg}
 
   return {
     close: () => {
-      stream.removeListener('data', handleMessage)
+      duplex.removeListener('data', handleMessage)
       if (!(handler instanceof EventEmitter)) return
       for (const [eventName, listener] of subscriptions.entries()) {
         handler.removeListener(eventName, listener)
