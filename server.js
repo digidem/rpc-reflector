@@ -23,23 +23,26 @@ module.exports = CreateServer
  * object will be called on this object. Methods can return a value, a Promise,
  * or a ReadableStream. Your transport stream must be able to encode/decode any
  * values that your handler returns
- * @param {(msg: MsgResponse | MsgEmit) => void} send Function that will be called with a
- * message to be sent over transport
- * @param {EventEmitter} receiver An event emitter that should emit a 'message'
- * event whenever a message is received to be processed
+ * @param {import('stream').Duplex} stream Duplex Stream with objectMode=true
  *
  * @returns {{ close: () => void }} An object with a single method `close()`
  * that will stop the server listening to and sending any more messages
  */
-function CreateServer (handler, send, receiver) {
+function CreateServer (handler, stream) {
   assert(typeof handler === 'object', 'Missing handler object.')
-  assert(typeof send === 'function', 'Missing send function.')
-  assert(receiver instanceof EventEmitter, 'Receiver must be an event emitter')
+  assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
 
   /** @type {Map<string, (...args: any[]) => void>} */
   let subscriptions = new Map()
 
-  receiver.on('message', handleMessage)
+  stream.on('data', handleMessage)
+
+  /** @param {MsgResponse | MsgEmit} msg */
+  function send (msg) {
+    // TODO: Do we need back pressure here? Would just result in buffering here
+    // vs. buffering in the stream, so probably no
+    stream.write(msg)
+  }
 
   /**
    * Handles an incoming message.
@@ -47,6 +50,11 @@ function CreateServer (handler, send, receiver) {
    * we understand, other messages are ignored
    */
   function handleMessage (msg) {
+    if (Buffer.isBuffer(msg) || typeof msg === 'string') {
+      return console.warn(
+        'It seems like the stream you are using is not in objectMode (received a message as a Buffer or string). Message was ignored'
+      )
+    }
     if (!Array.isArray(msg)) {
       return console.warn(`Received invalid message, is something else sending events on the same channel?
 Message: ${msg}
@@ -153,7 +161,7 @@ Message: ${msg}
 
   return {
     close: () => {
-      receiver.removeListener('message', handleMessage)
+      stream.removeListener('data', handleMessage)
       if (!(handler instanceof EventEmitter)) return
       for (const [eventName, listener] of subscriptions.entries()) {
         handler.removeListener(eventName, listener)

@@ -16,10 +16,12 @@
   },
   "devDependencies": {
     "@types/concat-stream": "^1.6.0",
+    "@types/duplexify": "^3.6.0",
     "@types/node": "^13.9.8",
     "@types/once": "^1.4.0",
     "@types/tape": "^4.2.34",
     "@types/tape-async": "^2.3.0",
+    "duplexify": "^4.1.1",
     "into-stream": "^5.1.1",
     "p-is-promise": "^3.0.0",
     "readable-error": "^1.0.0",

@@ -3,6 +3,7 @@ const assert = require('assert')
 const { deserializeError } = require('serialize-error')
 const promiseTimeout = require('p-timeout')
 const util = require('util')
+const isStream = require('is-stream')
 
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
@@ -31,17 +32,13 @@ module.exports = CreateClient
  * Create an RPC client that will relay any method that is called via `send`. It
  * listens to replies from the server via `receiver`.
  *
- * @param {(msg: MsgRequest | MsgOn | MsgOff) => void} send Function that will be called with a
- * message to be sent over transport
- * @param {EventEmitter} receiver An event emitter that should emit a 'message'
- * event whenever a message is received to be processed
+ * @param {import('stream').Duplex} stream Duplex Stream with objectMode=true
  * @param {{timeout?: number}} options Optionally set timeout (default 5000)
  *
  * @returns {import("./lib/types").Client}
  */
-function CreateClient (send, receiver, { timeout = 5000 } = {}) {
-  assert(typeof send === 'function', 'Missing send function.')
-  assert(receiver instanceof EventEmitter, 'Receiver must be an event emitter')
+function CreateClient (stream, { timeout = 5000 } = {}) {
+  assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
   let id = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
   const pending = new Map() // Messages pending response
@@ -49,7 +46,14 @@ function CreateClient (send, receiver, { timeout = 5000 } = {}) {
   const collector = new Map() // Streaming responses pending return
   const emitter = new EventEmitter()
 
-  receiver.on('message', handleMessage)
+  stream.on('data', handleMessage)
+
+  /** @param {MsgRequest | MsgOn | MsgOff} msg */
+  function send (msg) {
+    // TODO: Do we need back pressure here? Would just result in buffering here
+    // vs. buffering in the stream, so probably no
+    stream.write(msg)
+  }
 
   /**
    * Handles an incoming message.
@@ -57,6 +61,11 @@ function CreateClient (send, receiver, { timeout = 5000 } = {}) {
    * we understand, other messages are ignored
    */
   function handleMessage (msg) {
+    if (Buffer.isBuffer(msg) || typeof msg === 'string') {
+      return console.warn(
+        'It seems like the stream you are using is not in objectMode (received a message as a Buffer or string). Message was ignored'
+      )
+    }
     if (!Array.isArray(msg)) {
       return console.warn(`Received invalid message, is something else sending events on the same channel?
 Message: ${msg}
@@ -132,7 +141,7 @@ Message: ${msg}
   }
 
   function handleClose () {
-    receiver.off('message', handleMessage)
+    stream.off('data', handleMessage)
   }
 
   /** @type {ProxyHandler<any>} */
