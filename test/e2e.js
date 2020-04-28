@@ -60,7 +60,9 @@ function setup (api, opts) {
 
   return {
     client: CreateClient(clientStream, opts),
-    server: CreateServer(api, serverStream)
+    server: CreateServer(api, serverStream),
+    clientStream,
+    serverStream
   }
 }
 
@@ -132,13 +134,11 @@ test('Closed server does not respond, client times out', async t => {
   t.end()
 })
 
-test('Trying to add a listener fails silently when server api does not support event emitters', t => {
-  const { client } = setup(myApi)
-  try {
-    client.on('myEvent', t.fail)
-  } catch (error) {
-    t.fail('Should not throw error')
-  }
+test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', t => {
+  const { client, clientStream } = setup({})
+  client.on('myEvent', t.fail)
+  client.off('myEvent', t.fail)
+  clientStream.on('data', t.fail)
   setTimeout(t.end, 200)
 })
 
