@@ -57,37 +57,25 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
 
   /**
    * Handles an incoming message.
-   * @param {any} msg Can be any type, but we only process messages types that
-   * we understand, other messages are ignored
+   * @param {any} msg Can be any type, but we only process messages
+   * types that we understand, other messages are ignored
    */
   function handleMessage (msg) {
-    if (Buffer.isBuffer(msg) || typeof msg === 'string') {
-      return console.warn(
-        'It seems like the stream you are using is not in objectMode (received a message as a Buffer or string). Message was ignored'
-      )
-    }
-    if (!Array.isArray(msg)) {
-      return console.warn(`Received invalid message, is something else sending events on the same channel?
-Message: ${msg}
-(Message was ignored)`)
-    }
+    if (!isValidMessage(msg)) return
     switch (msg[0]) {
       case msgType.RESPONSE:
-        handleResponse(msg)
-        break
+        return handleResponse(/** @type {MsgResponse} */ (msg))
       case msgType.EMIT:
-        handleEmit(msg)
-        break
+        return handleEmit(/** @type {MsgEmit} */ (msg))
       default:
         console.warn(
-          `Received invalid message type: ${msg[0]}. (Message was ignored)`
+          `Received unexpected message type: ${msg[0]}. (Message was ignored)`
         )
     }
   }
 
-  /** @param {any[]} msg */
+  /** @param {MsgResponse} msg */
   function handleResponse (msg) {
-    if (!isValidMessage(msg)) return
     const resolveReject = pending.get(msg[1])
     if (!resolveReject) {
       return console.warn(
@@ -123,10 +111,9 @@ Message: ${msg}
     }
   }
 
-  /** @param {any[]} msg */
+  /** @param {MsgEmit} msg */
   function handleEmit (msg) {
-    if (!isValidMessage(msg)) return
-    const [, eventName, errorObject, args = []] = /** @type {MsgEmit} */ (msg)
+    const [, eventName, errorObject, args = []] = msg
     if (errorObject) {
       Reflect.apply(emitter.emit, emitter, [
         eventName,

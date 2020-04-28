@@ -3,7 +3,7 @@ const isValidMessage = require('../lib/validate-message')
 
 const validMessages = require('./fixtures/valid-messages.json')
 
-const invalidMessages = require('./fixtures/invalid-messages.json')
+const invalidMessages = require('./fixtures/invalid-messages')
 
 test('Valid messages return true', t => {
   for (const msg of validMessages) {

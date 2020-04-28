@@ -8,7 +8,7 @@ const duplexify = require('duplexify')
 const { CreateClient } = require('..')
 const isValidMessage = require('../lib/validate-message')
 const { msgType } = require('../lib/constants')
-const invalidMessages = require('./fixtures/invalid-messages.json')
+const invalidMessages = require('./fixtures/invalid-messages')
 
 test('Calling method sends request message with method name at position 2 and arguments at position 3', t => {
   t.plan(6)
@@ -119,8 +119,14 @@ test('Ignores invalid messages', t => {
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
 
+  const validOnlyForServer = [
+    [0, 2, 'anyMethod', []],
+    [2, 'eventName'],
+    [3, 'eventName']
+  ]
+
   writeable.on('data', outgoingMsg => {
-    for (const msg of invalidMessages) {
+    for (const msg of invalidMessages.concat(validOnlyForServer)) {
       if (typeof msg[1] === 'number') {
         msg[1] = outgoingMsg[1]
       }

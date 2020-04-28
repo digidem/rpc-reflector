@@ -4,7 +4,7 @@ const { PassThrough } = require('stream')
 const duplexify = require('duplexify')
 
 const { CreateServer } = require('..')
-const invalidMessages = require('./fixtures/invalid-messages.json')
+const invalidMessages = require('./fixtures/invalid-messages')
 
 test('Ignores invalid messages', t => {
   t.plan(1)
@@ -12,11 +12,16 @@ test('Ignores invalid messages', t => {
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
 
+  const validOnlyForClient = [
+    [1, 4, null, 'returnedValue'],
+    [4, 'eventName', null, []]
+  ]
+
   writeable.on('data', () => {
     t.fail('Should ignore all invalid messages')
   })
   CreateServer({}, stream)
-  for (const msg of invalidMessages) {
+  for (const msg of invalidMessages.concat(validOnlyForClient)) {
     readable.write(msg)
   }
   t.pass('Ignored all invalid messages')

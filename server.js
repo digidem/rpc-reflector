@@ -52,37 +52,22 @@ function CreateServer (handler, duplex) {
    * we understand, other messages are ignored
    */
   function handleMessage (msg) {
-    if (Buffer.isBuffer(msg) || typeof msg === 'string') {
-      return console.warn(
-        'It seems like the stream you are using is not in objectMode (received a message as a Buffer or string). Message was ignored'
-      )
-    }
-    if (!Array.isArray(msg)) {
-      return console.warn(`Received invalid message, is something else sending events on the same channel?
-Message: ${msg}
-(Message was ignored)`)
-    }
-
+    if (!isValidMessage(msg)) return
     switch (msg[0]) {
       case msgType.REQUEST:
-        handleRequest(msg)
-        break
+        return handleRequest(/** @type {MsgRequest} */ (msg))
       case msgType.ON:
-        handleOn(msg)
-        break
+        return handleOn(/** @type {MsgOn} */ (msg))
       case msgType.OFF:
-        handleOff(msg)
-        break
+        return handleOff(/** @type {MsgOff} */ (msg))
       default:
         console.warn(`Unhandled message type: ${msg[0]}. (Message was ignored)`)
     }
   }
 
-  /** @param {any[]} msg */
+  /** @param {MsgRequest} msg */
   async function handleRequest (msg) {
-    if (!isValidMessage(msg)) return
-
-    const [, msgId, method, params] = /** @type {MsgRequest} */ (msg)
+    const [, msgId, method, params] = msg
     /** @type {MsgResponse} */
     let response
 
@@ -113,15 +98,13 @@ Message: ${msg}
     }
   }
 
-  /** @param {any[]} msg */
+  /** @param {MsgOn} msg */
   function handleOn (msg) {
-    if (!isValidMessage(msg)) return
-
-    const [, eventName] = /** @type {MsgOn} */ (msg)
+    const [, eventName] = msg
 
     if (!(handler instanceof EventEmitter)) {
       return console.warn(
-        'Handler is not an EventEmitter, so it does not support adding listeners'
+        'Handler is not an EventEmitter, so it does not support adding listeners. (Subscription from client was ignored)'
       )
     }
 
@@ -140,11 +123,9 @@ Message: ${msg}
     handler.on(eventName, listener)
   }
 
-  /** @param {any[]} msg */
+  /** @param {MsgOff} msg */
   function handleOff (msg) {
-    if (!isValidMessage(msg)) return
-
-    const [, eventName] = /** @type {MsgOff} */ (msg)
+    const [, eventName] = msg
 
     // Fail silently if there is nothing to unsubscribe
     if (!(handler instanceof EventEmitter)) return
