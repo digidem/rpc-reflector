@@ -11,6 +11,14 @@ const { PassThrough } = require('stream')
 
 const fixturePath = path.join(__dirname, 'fixtures/lorem.txt')
 const fixtureBuf = fs.readFileSync(fixturePath)
+const mixedObjectFixture1 = [Buffer.from('hello'), 'world', 5, {}]
+const mixedObjectFixture2 = ['world', Buffer.from('hello'), 5, {}]
+const mixedObjectFixture1 = [
+  Uint8Array.from(Buffer.from('hello')),
+  'world',
+  5,
+  {}
+]
 const objectsFixture = fixtureBuf
   .toString()
   .split(' ')
@@ -46,8 +54,8 @@ const myApi = {
     // (each chunk is sent as a separate message)
     return fs.createReadStream(fixturePath, { highWaterMark: 10 })
   },
-  createObjectStream () {
-    return intoStream.object(objectsFixture)
+  createObjectStream (o) {
+    return intoStream.object(o)
   }
 }
 
@@ -74,7 +82,7 @@ test('Client is instance of EventEmitter', t => {
 
 test('Calls methods on server', async t => {
   const { client } = setup(myApi)
-  t.plan(7)
+  t.plan(10)
   t.equal(await client.add(1, 2), 3, 'Sync method works')
   t.equal(await client.getLlama(), 'llama', 'Async method works')
   t.equal(
@@ -87,9 +95,33 @@ test('Calls methods on server', async t => {
     'Readable buffer works'
   )
   t.deepEqual(
-    await client.createObjectStream(),
+    await client.createObjectStream(objectsFixture),
     objectsFixture,
     'Readable stream as object works'
+  )
+
+  // Use an objectMode stream to force intoString to make a stream that provides
+  // chunks as Uint8Arrays (there are no native node streams that have
+  // Uint8Array chunks, but they were added to the spec as supported)
+  const chunks = fixtureBuf.toString().match(/.{1,4}/gms)
+  const arrayOfUint8Arrays = chunks.map(c => Uint8Array.from(Buffer.from(c)))
+  const fixtureAsUint8Array = Uint8Array.from(fixtureBuf)
+  t.deepEqual(
+    await client.createObjectStream(arrayOfUint8Arrays),
+    fixtureAsUint8Array,
+    'Readable stream as Uint8Array works'
+  )
+
+  //
+  t.deepEqual(
+    await client.createObjectStream(mixedObjectFixture1),
+    mixedObjectFixture1,
+    'Readable stream as mixed object (Buffer first) works'
+  )
+  t.deepEqual(
+    await client.createObjectStream(mixedObjectFixture2),
+    mixedObjectFixture2,
+    'Readable stream as mixed object (String first) works'
   )
   try {
     await client.errorMethod()

@@ -42,7 +42,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
   let id = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
   const pending = new Map() // Messages pending response
-  /** @type {Map<number, Array<Buffer | string | number | boolean | object>>} */
+  /** @type {Map<number, Array<any>>} */
   const collector = new Map() // Streaming responses pending return
   const emitter = new EventEmitter()
 
@@ -101,6 +101,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
     } else {
       const streamedResponse = collector.get(msgId)
       if (streamedResponse) {
+        /* istanbul ignore if  */
         if (value != null) streamedResponse.push(value)
         resolve(concatStreamedResponse(streamedResponse))
         collector.delete(msgId)
@@ -194,8 +195,8 @@ CreateClient.close = function close (client) {
  * A streamedResponse is an array of buffers, strings, or objects. For buffers
  * or strings, concat them all, but anything else returns an array
  *
- * @param {Array<Buffer | string | number | boolean | object>} streamedResponse
- * @returns {Buffer | string | Array<Buffer | string | number | boolean | object>}
+ * @param {any[]} streamedResponse
+ * @returns {Buffer | Uint8Array | string | any[]}
  */
 function concatStreamedResponse (streamedResponse) {
   let type
@@ -206,18 +207,43 @@ function concatStreamedResponse (streamedResponse) {
       length += chunk.length
     } else if (typeof chunk === 'string') {
       type = !type || type === 'string' ? 'string' : 'object'
+    } else if (util.types.isUint8Array(chunk)) {
+      type = !type || type === 'uint' ? 'uint' : 'object'
+      length += chunk.length
     } else {
       type = 'object'
     }
   }
   switch (type) {
     case 'buffer':
-      // @ts-ignore TS doesn't understand the check above
-      return Buffer.concat(streamedResponse, length)
+      return Buffer.concat(/** @type {Buffer[]} */ (streamedResponse), length)
+    case 'uint':
+      return concatUintArrays(
+        /** @type {Uint8Array[]} */ (streamedResponse),
+        length
+      )
     case 'string':
       return streamedResponse.join('')
     default:
-      // @ts-ignore TS doesn't understand the check above
       return streamedResponse
   }
+}
+
+/**
+ * @param {Uint8Array[]} arrays
+ * @param {number} length
+ * @returns {Uint8Array}
+ */
+function concatUintArrays (arrays, length) {
+  const result = new Uint8Array(length)
+
+  // for each array - copy it over result
+  // next array is copied right after the previous one
+  let offset = 0
+  for (const array of arrays) {
+    result.set(array, offset)
+    offset += array.length
+  }
+
+  return result
 }
