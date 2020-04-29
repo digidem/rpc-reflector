@@ -17,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "@msgpack/msgpack": "^1.12.1",
+    "duplexify": "^4.1.1",
     "is-stream": "^2.0.0",
     "length-prefixed-stream": "^2.0.0",
     "p-timeout": "^3.2.0",
@@ -33,9 +34,9 @@
     "@types/tape": "^4.2.34",
     "@types/tape-async": "^2.3.0",
     "@types/through2": "^2.0.34",
-    "duplexify": "^4.1.1",
     "husky": "^4.2.5",
     "into-stream": "^5.1.1",
+    "native-duplexpair": "^1.0.0",
     "p-is-promise": "^3.0.0",
     "prettier": "^2.0.5",
     "pretty-quick": "^2.0.1",

@@ -6,8 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const intoStream = require('into-stream')
 const ReadableError = require('readable-error')
-const duplexify = require('duplexify')
-const { PassThrough } = require('stream')
+const DuplexPair = require('native-duplexpair')
 
 const fixturePath = path.join(__dirname, 'fixtures/lorem.txt')
 const fixtureBuf = fs.readFileSync(fixturePath)
@@ -52,11 +51,10 @@ const myApi = {
 }
 
 function setup(api, opts) {
-  const a = new PassThrough({ objectMode: true })
-  const b = new PassThrough({ objectMode: true })
+  const { socket1, socket2 } = new DuplexPair({ objectMode: true })
 
-  const serverStream = duplexify(a, b, { objectMode: true })
-  const clientStream = duplexify(b, a, { objectMode: true })
+  const serverStream = socket1
+  const clientStream = socket2
 
   return {
     client: createClient(clientStream, opts),
