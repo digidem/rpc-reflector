@@ -9,7 +9,16 @@ export enum msgType {
   EMIT,
 }
 
-export type MsgRequest = [typeof msgType.REQUEST, number, string, any[]]
+export type MsgRequest = [typeof msgType.REQUEST, number, string[], any[]]
+// The last message in a streaming request
+type MsgResponseEnd = [
+  typeof msgType.RESPONSE,
+  number,
+  ErrorObject | null,
+  any,
+  false,
+  boolean? // Last message in streaming response indicates if was objectMode
+]
 export type MsgResponse =
   | [
       typeof msgType.RESPONSE,
@@ -18,14 +27,7 @@ export type MsgResponse =
       any?, // result
       boolean? // more data to come?
     ]
-  | [
-      typeof msgType.RESPONSE,
-      number,
-      ErrorObject | null,
-      any,
-      false,
-      boolean? // Last message in streaming response indicates if was objectMode
-    ]
+  | MsgResponseEnd
 export type MsgOn = [typeof msgType.ON, string]
 export type MsgOff = [typeof msgType.OFF, string]
 export type MsgEmit = [typeof msgType.EMIT, string, ErrorObject | null, any[]?]
@@ -35,4 +37,4 @@ interface I {
   [method: string]: (...args: any[]) => Promise<any>
 }
 
-export type Client = I & EventEmitter
+export type Client = (...args: any[]) => Promise<any> & I & EventEmitter

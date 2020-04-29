@@ -3,6 +3,8 @@ module.exports = [
   Uint8Array.from([1, 2]),
   [0],
   [0, 'stringID'],
+  [0, 7, 'stringMethodName'],
+  [0, 7, ['stringMethodName', 2]],
   [0, 7],
   [1],
   [1, 'stringID'],

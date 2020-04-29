@@ -8,12 +8,12 @@ const isValidMessage = require('./lib/validate-message')
 const MessageStream = require('./lib/message-stream')
 const isObjectMode = require('./lib/is-object-mode-readable')
 
-/** @typedef {import("./lib/types").MsgRequest} MsgRequest */
-/** @typedef {import("./lib/types").MsgResponse} MsgResponse */
-/** @typedef {import("./lib/types").MsgOn} MsgOn */
-/** @typedef {import("./lib/types").MsgOff} MsgOff */
-/** @typedef {import("./lib/types").MsgEmit} MsgEmit */
-/** @typedef {import("./lib/types").Message} Message */
+/** @typedef {import('./lib/types').MsgRequest} MsgRequest */
+/** @typedef {import('./lib/types').MsgResponse} MsgResponse */
+/** @typedef {import('./lib/types').MsgOn} MsgOn */
+/** @typedef {import('./lib/types').MsgOff} MsgOff */
+/** @typedef {import('./lib/types').MsgEmit} MsgEmit */
+/** @typedef {import('./lib/types').Message} Message */
 
 module.exports = createServer
 
@@ -68,17 +68,17 @@ function createServer(handler, duplex) {
 
   /** @param {MsgRequest} msg */
   async function handleRequest(msg) {
-    const [, msgId, method, params] = msg
+    const [, msgId, propertyKeys, params] = msg
     /** @type {MsgResponse} */
     let response
 
-    if (!Reflect.has(handler, method)) {
+    if (!isFunction(handler, propertyKeys)) {
       const error = new Error('Method not supported')
       response = [msgType.RESPONSE, msgId, serializeError(error)]
     } else {
       try {
         const result = await Promise.resolve(
-          Reflect.apply(handler[method], handler, params)
+          applyMethodChain(handler, propertyKeys, handler, params)
         )
         if (isStream.readable(result)) {
           return handleStream(result)
@@ -147,4 +147,47 @@ function createServer(handler, duplex) {
       }
     },
   }
+}
+
+/**
+ * @private
+ * Checks if deeply nested property is a function
+ *
+ * @param {object} target
+ * @param {PropertyKey[]} propertyKeys
+ * @returns {boolean}
+ */
+function isFunction(target, propertyKeys) {
+  // if (target == null)
+  //   throw new TypeError('hasMethodChain() called on non-object')
+  try {
+    let nested = target
+    for (const key of propertyKeys) {
+      if (!Reflect.has(nested, key)) return false
+      // @ts-ignore
+      nested = nested[key]
+    }
+    return typeof nested === 'function'
+  } catch (e) {
+    return false
+  }
+}
+
+/**
+ * @private
+ * Calls a deeply nested property as a function
+ *
+ * @param {object} target
+ * @param {PropertyKey[]} propertyKeys
+ * @param {any} thisArg
+ * @param {ArrayLike<any>} args
+ * @returns {any}
+ */
+function applyMethodChain(target, propertyKeys, thisArg, args) {
+  let nested = target
+  for (const key of propertyKeys) {
+    // @ts-ignore
+    nested = nested[key]
+  }
+  return Reflect.apply(/** @type {Function} */ (nested), thisArg, args)
 }

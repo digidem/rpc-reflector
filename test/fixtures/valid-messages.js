@@ -1,6 +1,6 @@
 module.exports = [
-  [0, 2, 'anyMethod', []],
-  [0, 3, 'anyMethod', ['param2', { other: 'param' }]],
+  [0, 2, ['anyMethod'], []],
+  [0, 3, ['anyMethod'], ['param2', { other: 'param' }]],
   [1, 4, null, 'returnedValue'],
   [1, 4, null, Buffer.from('returnedValue')],
   [1, 4, null, Buffer.from('returnedValue'), true],

@@ -8,12 +8,14 @@ const isStream = require('is-stream')
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
 
-/** @typedef {import("./lib/types").MsgRequest} MsgRequest */
-/** @typedef {import("./lib/types").MsgResponse} MsgResponse */
-/** @typedef {import("./lib/types").MsgOn} MsgOn */
-/** @typedef {import("./lib/types").MsgOff} MsgOff */
-/** @typedef {import("./lib/types").MsgEmit} MsgEmit */
-/** @typedef {import("./lib/types").Message} Message */
+/** @typedef {import('./lib/types').MsgRequest} MsgRequest */
+/** @typedef {import('./lib/types').MsgResponse} MsgResponse */
+/** @typedef {import('./lib/types').MsgOn} MsgOn */
+/** @typedef {import('./lib/types').MsgOff} MsgOff */
+/** @typedef {import('./lib/types').MsgEmit} MsgEmit */
+/** @typedef {import('./lib/types').Message} Message */
+/** @typedef {import('./lib/types').Client} Client */
+/** @typedef {(...args: any[]) => Client} GetMethodTrap */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -35,7 +37,7 @@ module.exports = createClient
  * @param {import('stream').Duplex} stream Duplex Stream with objectMode=true
  * @param {{timeout?: number}} options Optionally set timeout (default 5000)
  *
- * @returns {import("./lib/types").Client}
+ * @returns {Client}
  */
 function createClient(stream, { timeout = 5000 } = {}) {
   assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
@@ -142,38 +144,42 @@ function createClient(stream, { timeout = 5000 } = {}) {
     stream.off('data', handleMessage)
   }
 
-  /** @type {ProxyHandler<any>} */
-  const handler = {
-    /** @type {(target: any, prop: string | number | symbol, receiver: any) => (...args: any[]) => any} */
-    get: (target, prop, receiver) => (...args) => {
-      if (prop === closeProp) {
-        return handleClose()
-      }
-      if (prop === util.inspect.custom) {
-        return '[RpcReflectorClient]'
-      }
+  /** @type {(keys?: string[]) => ProxyHandler<any>} */
+  const createHandler = (keys = []) => ({
+    get(target, prop, receiver) {
+      if (prop === closeProp && keys.length === 0) return () => handleClose()
       if (typeof prop !== 'string') {
         throw new Error(`ReferenceError: ${String(prop)} is not defined`)
       }
-      if (prop in target) {
+      return new Proxy(receiver, createHandler(keys.concat([prop])))
+    },
+    apply(target, thisArg, args) {
+      const prop = keys[keys.length - 1]
+
+      if (prop in emitter) {
+        if (keys.length > 1)
+          throw new Error(
+            'Currently event emitters are only supported on base object'
+          )
+        const eventEmitterProp = /** @type {keyof EventEmitter} */ (prop)
         if (emitterSubscribeMethods.includes(prop)) {
-          Reflect.apply(target[prop], target, args)
+          Reflect.apply(emitter[eventEmitterProp], emitter, args)
           send([msgType.ON, args[0]])
         } else if (emitterUnsubscribeMethods.includes(prop)) {
-          Reflect.apply(target[prop], target, args)
+          Reflect.apply(emitter[eventEmitterProp], emitter, args)
           if (emitter.listenerCount(args[0]) === 0) {
             send([msgType.OFF, args[0]])
           }
         } else {
-          return Reflect.apply(target[prop], target, args)
+          return Reflect.apply(emitter[eventEmitterProp], emitter, args)
         }
-        return receiver
+        return emitter
       } else {
         const msgId = id++
 
         const pendingResult = new Promise((resolve, reject) => {
           pending.set(msgId, [resolve, reject])
-          send([msgType.REQUEST, msgId, prop, args])
+          send([msgType.REQUEST, msgId, keys, args])
         })
 
         return promiseTimeout(pendingResult, timeout, function fallback() {
@@ -184,9 +190,12 @@ function createClient(stream, { timeout = 5000 } = {}) {
         })
       }
     },
-  }
+    getPrototypeOf() {
+      return keys.length ? null : EventEmitter.prototype
+    },
+  })
 
-  const proxy = new Proxy(emitter, handler)
+  const proxy = new Proxy(() => {}, createHandler())
 
   return proxy
 }

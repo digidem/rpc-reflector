@@ -19,6 +19,20 @@ const myApi = {
   add(a, b) {
     return a + b
   },
+  prop: 'foo',
+  namespace: {
+    sub(a, b) {
+      return a - b
+    },
+    prop: 'bar',
+  },
+  deep: {
+    nested: {
+      mult(a, b) {
+        return a * b
+      },
+    },
+  },
   async getLlama() {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
@@ -119,6 +133,48 @@ test('Calls methods on server', async (t) => {
   }
 })
 
+test('Nested properties and methods', async (t) => {
+  const { client } = setup(myApi)
+  t.plan(12)
+  t.equal(await client.namespace.sub(5, 2), 3, 'nested method works')
+  t.equal(await client.deep.nested.mult(2, 3), 6, 'deep nested works')
+  try {
+    await client.namespace.missingMethod('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling missing method threw')
+    t.equal(error.message, 'Method not supported', 'Error message as expected')
+  }
+  try {
+    await client.deep.missingNameSpace.sub('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling with missing namespace threw')
+    t.equal(error.message, 'Method not supported', 'Error message as expected')
+  }
+  try {
+    await client.prop('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling prop as method fails')
+    t.equal(error.message, 'Method not supported', 'Error message as expected')
+  }
+  try {
+    await client.prop.oops('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling method on prop fails')
+    t.equal(error.message, 'Method not supported', 'Error message as expected')
+  }
+  try {
+    await client.namespace.prop('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling nested prop as method fails')
+    t.equal(error.message, 'Method not supported', 'Error message as expected')
+  }
+})
+
 test('Calling non-existant methods rejects with error', async (t) => {
   const { client } = setup(myApi)
 
@@ -164,6 +220,20 @@ test('Subscribes to events on server', (t) => {
     // eslint-disable-next-line no-useless-call
     emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
   })
+})
+
+test('Nested props are not emitters', (t) => {
+  t.plan(2)
+  const emitterApi = new EventEmitter()
+  const { client } = setup(emitterApi)
+  t.false(
+    client.namespace instanceof EventEmitter,
+    'nested prop is not event emitter'
+  )
+  t.throws(
+    () => client.namespace.on('any', () => {}),
+    "Can't subscribe to events on nested props"
+  )
 })
 
 test('Unsubscribes to events', (t) => {
