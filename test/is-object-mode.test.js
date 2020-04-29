@@ -1,4 +1,4 @@
-const test = require('tape')
+const test = require('tape-async')
 const { Readable } = require('stream')
 const { Readable: Readable3 } = require('readable-stream')
 const isObjectMode = require('../lib/is-object-mode-readable')

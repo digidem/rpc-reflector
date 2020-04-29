@@ -5,7 +5,7 @@ const pIsPromise = require('p-is-promise')
 const { PassThrough } = require('stream')
 const duplexify = require('duplexify')
 
-const { CreateClient } = require('..')
+const { createClient } = require('..')
 const isValidMessage = require('../lib/validate-message')
 const { msgType } = require('../lib/constants')
 const invalidMessages = require('./fixtures/invalid-messages')
@@ -24,7 +24,7 @@ test('Calling method sends request message with method name at position 2 and ar
       'Message is expected structure'
     )
   })
-  const client = CreateClient(stream, { timeout: 100 })
+  const client = createClient(stream, { timeout: 100 })
   const promise = client.myMethod('arg1', { other: 2 }).catch((err) => {
     t.ok(/timed out/.test(err.message), 'Request times out (messages ignored)')
   })
@@ -45,7 +45,7 @@ test('Calling method with no args sends request message with method name at posi
       'Message is expected structure'
     )
   })
-  const client = CreateClient(stream, { timeout: 200 })
+  const client = createClient(stream, { timeout: 200 })
   const promise = client.myMethod().catch((err) => {
     t.ok(/timed out/.test(err.message), 'Request times out (messages ignored)')
   })
@@ -61,7 +61,7 @@ test('Method resolves with response on same messageId', (t) => {
   writeable.on('data', (msg) => {
     readable.write([msgType.RESPONSE, msg[1], null, expectedResult])
   })
-  const client = CreateClient(stream)
+  const client = createClient(stream)
   client
     .myMethod()
     .then((v) => {
@@ -81,7 +81,7 @@ test('Method ignores response on different messageId', (t) => {
   writeable.on('data', (msg) => {
     readable.write([msgType.RESPONSE, Math.random(), null, expectedResult])
   })
-  const client = CreateClient(stream, { timeout: 200 })
+  const client = createClient(stream, { timeout: 200 })
   client
     .myMethod()
     .then(t.fail)
@@ -102,7 +102,7 @@ test('Throws when receiving message with errorObject', (t) => {
     readable.write([msgType.RESPONSE, msg[1], { message: 'MyError' }])
   })
 
-  const client = CreateClient(stream)
+  const client = createClient(stream)
   client
     .myMethod()
     .then(t.fail)
@@ -134,7 +134,7 @@ test('Ignores invalid messages', (t) => {
     }
   })
 
-  const client = CreateClient(stream, { timeout: 200 })
+  const client = createClient(stream, { timeout: 200 })
   client
     .myMethod()
     .then(t.fail)
@@ -160,7 +160,7 @@ test('Can subscribe listeners', (t) => {
       readable.write([msgType.EMIT, 'myEvent', null, ['second']])
     })
   })
-  const client = CreateClient(stream)
+  const client = createClient(stream)
   const result = client.on('myEvent', (...args) => {
     if (++count === 1) {
       t.deepEqual(args, expected, 'Arguments are emitted as expected')
@@ -189,7 +189,7 @@ test('emitter.once works and sends `OFF` message', (t) => {
     t.deepEqual(msg, [msgType.OFF, 'myEvent'], 'Client sent OFF msg')
     t.end()
   })
-  const client = CreateClient(stream)
+  const client = createClient(stream)
   const result = client.once('myEvent', (...args) => {
     if (++count === 1) {
       t.deepEqual(args, expected, 'Arguments are emitted as expected')
@@ -221,7 +221,7 @@ test('removeListener works and sends `OFF` message', (t) => {
       t.end()
     }
   })
-  const client = CreateClient(stream)
+  const client = createClient(stream)
   const result = client.on('myEvent', function listener(...args) {
     setImmediate(() => client.removeListener('myEvent', listener))
     if (count++ > 0) t.fail('Should not be called more than once')

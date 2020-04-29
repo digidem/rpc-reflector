@@ -25,7 +25,7 @@ const emitterSubscribeMethods = [
 const emitterUnsubscribeMethods = ['removeListener', 'off']
 const closeProp = Symbol('close')
 
-module.exports = CreateClient
+module.exports = createClient
 
 /**
  * @public
@@ -37,7 +37,7 @@ module.exports = CreateClient
  *
  * @returns {import("./lib/types").Client}
  */
-function CreateClient(stream, { timeout = 5000 } = {}) {
+function createClient(stream, { timeout = 5000 } = {}) {
   assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
   let id = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
@@ -192,12 +192,12 @@ function CreateClient(stream, { timeout = 5000 } = {}) {
 }
 
 /**
- * Close a client. Note this is a static method on `CreateClient` and it expects
- * a client created with `CreateClient` as its argument.
+ * Close a client. Note this is a static method on `createClient` and it expects
+ * a client created with `createClient` as its argument.
  *
- * @param {any} client A client created with `CreateClient`
+ * @param {any} client A client created with `createClient`
  */
-CreateClient.close = function close(client) {
+createClient.close = function close(client) {
   return client[closeProp]()
 }
 

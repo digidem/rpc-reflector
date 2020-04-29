@@ -1,4 +1,5 @@
 module.exports = {
-  CreateClient: require('./client'),
-  CreateServer: require('./server'),
+  createClient: require('./client'),
+  createServer: require('./server'),
+  createEncodeDecodeStream: require('./encode-decode'),
 }

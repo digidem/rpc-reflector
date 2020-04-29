@@ -16,18 +16,23 @@
   "author": "Gregor MacLennan",
   "license": "ISC",
   "dependencies": {
+    "@msgpack/msgpack": "^1.12.1",
     "is-stream": "^2.0.0",
+    "length-prefixed-stream": "^2.0.0",
     "p-timeout": "^3.2.0",
-    "serialize-error": "^6.0.0"
+    "serialize-error": "^6.0.0",
+    "through2": "^3.0.1"
   },
   "devDependencies": {
     "@types/concat-stream": "^1.6.0",
     "@types/duplexify": "^3.6.0",
     "@types/node": "^13.9.8",
     "@types/once": "^1.4.0",
+    "@types/pump": "^1.1.0",
     "@types/readable-stream": "^2.3.5",
     "@types/tape": "^4.2.34",
     "@types/tape-async": "^2.3.0",
+    "@types/through2": "^2.0.34",
     "duplexify": "^4.1.1",
     "husky": "^4.2.5",
     "into-stream": "^5.1.1",

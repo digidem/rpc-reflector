@@ -15,7 +15,7 @@ const isObjectMode = require('./lib/is-object-mode-readable')
 /** @typedef {import("./lib/types").MsgEmit} MsgEmit */
 /** @typedef {import("./lib/types").Message} Message */
 
-module.exports = CreateServer
+module.exports = createServer
 
 /**
  * @public
@@ -31,7 +31,7 @@ module.exports = CreateServer
  * @returns {{ close: () => void }} An object with a single method `close()`
  * that will stop the server listening to and sending any more messages
  */
-function CreateServer(handler, duplex) {
+function createServer(handler, duplex) {
   assert(typeof handler === 'object', 'Missing handler object.')
   assert(isStream.duplex(duplex), 'Must pass a duplex stream as first argument')
 

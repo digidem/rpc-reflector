@@ -1,7 +1,7 @@
-const test = require('tape')
+const test = require('tape-async')
 const isValidMessage = require('../lib/validate-message')
 
-const validMessages = require('./fixtures/valid-messages.json')
+const validMessages = require('./fixtures/valid-messages')
 
 const invalidMessages = require('./fixtures/invalid-messages')
 

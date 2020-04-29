@@ -1,6 +1,6 @@
 // @ts-nocheck
 const test = require('tape-async')
-const { CreateClient, CreateServer } = require('..')
+const { createClient, createServer } = require('..')
 const { EventEmitter } = require('events')
 const fs = require('fs')
 const path = require('path')
@@ -59,8 +59,8 @@ function setup(api, opts) {
   const clientStream = duplexify(b, a, { objectMode: true })
 
   return {
-    client: CreateClient(clientStream, opts),
-    server: CreateServer(api, serverStream),
+    client: createClient(clientStream, opts),
+    server: createServer(api, serverStream),
     clientStream,
     serverStream,
   }
@@ -285,7 +285,7 @@ test('Closing server removes event listeners on server', (t) => {
 test('Closing the client stops it receiving messages from server', async (t) => {
   const { client } = setup(myApi, { timeout: 100 })
   t.equal(await client.add(1, 2), 3, 'Sync method works')
-  CreateClient.close(client)
+  createClient.close(client)
   try {
     await client.add(1, 2)
   } catch (err) {
