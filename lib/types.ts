@@ -10,13 +10,22 @@ export enum msgType {
 }
 
 export type MsgRequest = [typeof msgType.REQUEST, number, string, any[]]
-export type MsgResponse = [
-  typeof msgType.RESPONSE,
-  number, // messageId
-  ErrorObject | null, // error
-  any?, // result
-  boolean? // more data to come?
-]
+export type MsgResponse =
+  | [
+      typeof msgType.RESPONSE,
+      number, // messageId
+      ErrorObject | null, // error
+      any?, // result
+      boolean? // more data to come?
+    ]
+  | [
+      typeof msgType.RESPONSE,
+      number,
+      ErrorObject | null,
+      any,
+      false,
+      boolean? // Last message in streaming response indicates if was objectMode
+    ]
 export type MsgOn = [typeof msgType.ON, string]
 export type MsgOff = [typeof msgType.OFF, string]
 export type MsgEmit = [typeof msgType.EMIT, string, ErrorObject | null, any[]?]

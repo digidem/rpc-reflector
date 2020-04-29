@@ -82,7 +82,7 @@ function CreateClient(stream, { timeout = 5000 } = {}) {
         `Received unknown message ID: ${msg[1]}. (Message was ignored)`
       )
     }
-    const [, msgId, errorObject, value, more] = /** @type {MsgResponse} */ (msg)
+    const [, msgId, errorObject, value, more, objectMode] = msg
     const [resolve, reject] = resolveReject
 
     if (errorObject) {
@@ -99,14 +99,24 @@ function CreateClient(stream, { timeout = 5000 } = {}) {
         collector.set(msgId, [value])
       }
     } else {
+      // Last message in stream
       const streamedResponse = collector.get(msgId)
       if (streamedResponse) {
         /* istanbul ignore if  */
         if (value != null) streamedResponse.push(value)
-        resolve(concatStreamedResponse(streamedResponse))
+        // If objectMode stream, return array of chunks from stream
+        resolve(
+          objectMode
+            ? streamedResponse
+            : concatStreamedResponse(
+                // A non-objectMode stream be either Buffer or string
+                /** @type {Buffer[] | string[]} */ (streamedResponse)
+              )
+        )
         collector.delete(msgId)
       } else {
-        resolve(value)
+        // If objectMode stream, return array of chunks from stream
+        resolve(objectMode ? [value] : value)
       }
       pending.delete(msgId)
     }
@@ -192,58 +202,16 @@ CreateClient.close = function close(client) {
 }
 
 /**
- * A streamedResponse is an array of buffers, strings, or objects. For buffers
- * or strings, concat them all, but anything else returns an array
+ * For non-objectMode streams we receive the response as either Buffer or
+ * strings (Node also supports Uint8Arrays in streams, but message-stream will
+ * always convert these to buffers)
  *
- * @param {any[]} streamedResponse
- * @returns {Buffer | Uint8Array | string | any[]}
+ * @param {Buffer[] | string[]} streamedResponse
+ * @returns {Buffer | string}
  */
 function concatStreamedResponse(streamedResponse) {
-  let type
-  let length = 0
-  for (const chunk of streamedResponse) {
-    if (Buffer.isBuffer(chunk)) {
-      type = !type || type === 'buffer' ? 'buffer' : 'object'
-      length += chunk.length
-    } else if (typeof chunk === 'string') {
-      type = !type || type === 'string' ? 'string' : 'object'
-    } else if (util.types.isUint8Array(chunk)) {
-      type = !type || type === 'uint' ? 'uint' : 'object'
-      length += chunk.length
-    } else {
-      type = 'object'
-    }
+  if (typeof streamedResponse[0] === 'string') {
+    return /** @type {string[]} */ (streamedResponse).join('')
   }
-  switch (type) {
-    case 'buffer':
-      return Buffer.concat(/** @type {Buffer[]} */ (streamedResponse), length)
-    case 'uint':
-      return concatUintArrays(
-        /** @type {Uint8Array[]} */ (streamedResponse),
-        length
-      )
-    case 'string':
-      return streamedResponse.join('')
-    default:
-      return streamedResponse
-  }
-}
-
-/**
- * @param {Uint8Array[]} arrays
- * @param {number} length
- * @returns {Uint8Array}
- */
-function concatUintArrays(arrays, length) {
-  const result = new Uint8Array(length)
-
-  // for each array - copy it over result
-  // next array is copied right after the previous one
-  let offset = 0
-  for (const array of arrays) {
-    result.set(array, offset)
-    offset += array.length
-  }
-
-  return result
+  return Buffer.concat(/** @type {Buffer[]} */ (streamedResponse))
 }

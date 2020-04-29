@@ -6,6 +6,7 @@ const isStream = require('is-stream')
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
 const MessageStream = require('./lib/message-stream')
+const isObjectMode = require('./lib/is-object-mode-readable')
 
 /** @typedef {import("./lib/types").MsgRequest} MsgRequest */
 /** @typedef {import("./lib/types").MsgResponse} MsgResponse */

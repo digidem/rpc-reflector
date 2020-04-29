@@ -11,14 +11,6 @@ const { PassThrough } = require('stream')
 
 const fixturePath = path.join(__dirname, 'fixtures/lorem.txt')
 const fixtureBuf = fs.readFileSync(fixturePath)
-const mixedObjectFixture1 = [Buffer.from('hello'), 'world', 5, {}]
-const mixedObjectFixture2 = ['world', Buffer.from('hello'), 5, {}]
-const mixedObjectFixture1 = [
-  Uint8Array.from(Buffer.from('hello')),
-  'world',
-  5,
-  {},
-]
 const objectsFixture = fixtureBuf
   .toString()
   .split(' ')
@@ -82,7 +74,7 @@ test('Client is instance of EventEmitter', (t) => {
 
 test('Calls methods on server', async (t) => {
   const { client } = setup(myApi)
-  t.plan(10)
+  t.plan(9)
   t.equal(await client.add(1, 2), 3, 'Sync method works')
   t.equal(await client.getLlama(), 'llama', 'Async method works')
   t.equal(
@@ -99,29 +91,17 @@ test('Calls methods on server', async (t) => {
     objectsFixture,
     'Readable stream as object works'
   )
-
-  // Use an objectMode stream to force intoString to make a stream that provides
-  // chunks as Uint8Arrays (there are no native node streams that have
-  // Uint8Array chunks, but they were added to the spec as supported)
-  const chunks = fixtureBuf.toString().match(/.{1,4}/gms)
-  const arrayOfUint8Arrays = chunks.map((c) => Uint8Array.from(Buffer.from(c)))
-  const fixtureAsUint8Array = Uint8Array.from(fixtureBuf)
+  const arrayOfStrings = objectsFixture.toString().split(' ')
   t.deepEqual(
-    await client.createObjectStream(arrayOfUint8Arrays),
-    fixtureAsUint8Array,
-    'Readable stream as Uint8Array works'
+    await client.createObjectStream(arrayOfStrings),
+    arrayOfStrings,
+    'An object stream returns as an array of chunks, not as a concatenated string'
   )
-
-  //
+  const arrayOfBuffers = objectsFixture.toString().split(' ').map(Buffer.from)
   t.deepEqual(
-    await client.createObjectStream(mixedObjectFixture1),
-    mixedObjectFixture1,
-    'Readable stream as mixed object (Buffer first) works'
-  )
-  t.deepEqual(
-    await client.createObjectStream(mixedObjectFixture2),
-    mixedObjectFixture2,
-    'Readable stream as mixed object (String first) works'
+    await client.createObjectStream(arrayOfBuffers),
+    arrayOfBuffers,
+    'An object stream returns as an array of chunks, not as a concatenated buffer'
   )
   try {
     await client.errorMethod()
