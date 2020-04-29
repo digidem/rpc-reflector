@@ -20,7 +20,7 @@ const emitterSubscribeMethods = [
   'on',
   'prependListener',
   'once',
-  'prependOnceListener'
+  'prependOnceListener',
 ]
 const emitterUnsubscribeMethods = ['removeListener', 'off']
 const closeProp = Symbol('close')
@@ -37,7 +37,7 @@ module.exports = CreateClient
  *
  * @returns {import("./lib/types").Client}
  */
-function CreateClient (stream, { timeout = 5000 } = {}) {
+function CreateClient(stream, { timeout = 5000 } = {}) {
   assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
   let id = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
@@ -49,7 +49,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
   stream.on('data', handleMessage)
 
   /** @param {MsgRequest | MsgOn | MsgOff} msg */
-  function send (msg) {
+  function send(msg) {
     // TODO: Do we need back pressure here? Would just result in buffering here
     // vs. buffering in the stream, so probably no
     stream.write(msg)
@@ -60,7 +60,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
    * @param {any} msg Can be any type, but we only process messages
    * types that we understand, other messages are ignored
    */
-  function handleMessage (msg) {
+  function handleMessage(msg) {
     if (!isValidMessage(msg)) return
     switch (msg[0]) {
       case msgType.RESPONSE:
@@ -75,7 +75,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
   }
 
   /** @param {MsgResponse} msg */
-  function handleResponse (msg) {
+  function handleResponse(msg) {
     const resolveReject = pending.get(msg[1])
     if (!resolveReject) {
       return console.warn(
@@ -113,12 +113,12 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
   }
 
   /** @param {MsgEmit} msg */
-  function handleEmit (msg) {
+  function handleEmit(msg) {
     const [, eventName, errorObject, args = []] = msg
     if (errorObject) {
       Reflect.apply(emitter.emit, emitter, [
         eventName,
-        deserializeError(errorObject)
+        deserializeError(errorObject),
       ])
     } else {
       Reflect.apply(emitter.emit, emitter, [eventName, ...args])
@@ -128,7 +128,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
     }
   }
 
-  function handleClose () {
+  function handleClose() {
     stream.off('data', handleMessage)
   }
 
@@ -166,14 +166,14 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
           send([msgType.REQUEST, msgId, prop, args])
         })
 
-        return promiseTimeout(pendingResult, timeout, function fallback () {
+        return promiseTimeout(pendingResult, timeout, function fallback() {
           // Cleanup pending handlers because they will never be called now
           pending.delete(msgId)
           throw new Error(`Server timed out after ${timeout}ms.
             The server could be closed or the transport is down.`)
         })
       }
-    }
+    },
   }
 
   const proxy = new Proxy(emitter, handler)
@@ -187,7 +187,7 @@ function CreateClient (stream, { timeout = 5000 } = {}) {
  *
  * @param {any} client A client created with `CreateClient`
  */
-CreateClient.close = function close (client) {
+CreateClient.close = function close(client) {
   return client[closeProp]()
 }
 
@@ -198,7 +198,7 @@ CreateClient.close = function close (client) {
  * @param {any[]} streamedResponse
  * @returns {Buffer | Uint8Array | string | any[]}
  */
-function concatStreamedResponse (streamedResponse) {
+function concatStreamedResponse(streamedResponse) {
   let type
   let length = 0
   for (const chunk of streamedResponse) {
@@ -234,7 +234,7 @@ function concatStreamedResponse (streamedResponse) {
  * @param {number} length
  * @returns {Uint8Array}
  */
-function concatUintArrays (arrays, length) {
+function concatUintArrays(arrays, length) {
   const result = new Uint8Array(length)
 
   // for each array - copy it over result

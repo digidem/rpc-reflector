@@ -10,11 +10,11 @@ const isValidMessage = require('../lib/validate-message')
 const { msgType } = require('../lib/constants')
 const invalidMessages = require('./fixtures/invalid-messages')
 
-test('Calling method sends request message with method name at position 2 and arguments at position 3', t => {
+test('Calling method sends request message with method name at position 2 and arguments at position 3', (t) => {
   t.plan(6)
   const writeable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, null, { objectMode: true })
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     t.ok(Array.isArray(msg), 'Message is an array')
     t.ok(isValidMessage(msg), 'Message is valid')
     t.ok(typeof msg[1] === 'number', 'Message ID is a number')
@@ -25,17 +25,17 @@ test('Calling method sends request message with method name at position 2 and ar
     )
   })
   const client = CreateClient(stream, { timeout: 100 })
-  const promise = client.myMethod('arg1', { other: 2 }).catch(err => {
+  const promise = client.myMethod('arg1', { other: 2 }).catch((err) => {
     t.ok(/timed out/.test(err.message), 'Request times out (messages ignored)')
   })
   t.ok(pIsPromise(promise), 'returns a promise')
 })
 
-test('Calling method with no args sends request message with method name at position 2 and empty array at position 3', t => {
+test('Calling method with no args sends request message with method name at position 2 and empty array at position 3', (t) => {
   t.plan(6)
   const writeable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, null, { objectMode: true })
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     t.ok(Array.isArray(msg), 'Message is an array')
     t.ok(isValidMessage(msg), 'Message is valid')
     t.ok(typeof msg[1] === 'number', 'Message ID is a number')
@@ -46,46 +46,46 @@ test('Calling method with no args sends request message with method name at posi
     )
   })
   const client = CreateClient(stream, { timeout: 200 })
-  const promise = client.myMethod().catch(err => {
+  const promise = client.myMethod().catch((err) => {
     t.ok(/timed out/.test(err.message), 'Request times out (messages ignored)')
   })
   t.ok(pIsPromise(promise), 'returns a promise')
 })
 
-test('Method resolves with response on same messageId', t => {
+test('Method resolves with response on same messageId', (t) => {
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
   const expectedResult = {}
 
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     readable.write([msgType.RESPONSE, msg[1], null, expectedResult])
   })
   const client = CreateClient(stream)
   client
     .myMethod()
-    .then(v => {
+    .then((v) => {
       t.equal(v, expectedResult, 'Promise resolves with expected value')
       t.end()
     })
     .catch(t.fail)
 })
 
-test('Method ignores response on different messageId', t => {
+test('Method ignores response on different messageId', (t) => {
   t.plan(1)
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
   const expectedResult = {}
 
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     readable.write([msgType.RESPONSE, Math.random(), null, expectedResult])
   })
   const client = CreateClient(stream, { timeout: 200 })
   client
     .myMethod()
     .then(t.fail)
-    .catch(err => {
+    .catch((err) => {
       t.ok(
         /timed out/.test(err.message),
         'Request times out (messages ignored)'
@@ -93,12 +93,12 @@ test('Method ignores response on different messageId', t => {
     })
 })
 
-test('Throws when receiving message with errorObject', t => {
+test('Throws when receiving message with errorObject', (t) => {
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
 
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     readable.write([msgType.RESPONSE, msg[1], { message: 'MyError' }])
   })
 
@@ -106,14 +106,14 @@ test('Throws when receiving message with errorObject', t => {
   client
     .myMethod()
     .then(t.fail)
-    .catch(e => {
+    .catch((e) => {
       t.ok(e instanceof Error, 'Rejects with an Error')
       t.equal(e.message, 'MyError', 'Error message is passed through')
       t.end()
     })
 })
 
-test('Ignores invalid messages', t => {
+test('Ignores invalid messages', (t) => {
   t.plan(1)
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
@@ -122,10 +122,10 @@ test('Ignores invalid messages', t => {
   const validOnlyForServer = [
     [0, 2, 'anyMethod', []],
     [2, 'eventName'],
-    [3, 'eventName']
+    [3, 'eventName'],
   ]
 
-  writeable.on('data', outgoingMsg => {
+  writeable.on('data', (outgoingMsg) => {
     for (const msg of invalidMessages.concat(validOnlyForServer)) {
       if (typeof msg[1] === 'number') {
         msg[1] = outgoingMsg[1]
@@ -138,7 +138,7 @@ test('Ignores invalid messages', t => {
   client
     .myMethod()
     .then(t.fail)
-    .catch(err => {
+    .catch((err) => {
       t.ok(
         /timed out/.test(err.message),
         'Request times out (messages ignored)'
@@ -146,14 +146,14 @@ test('Ignores invalid messages', t => {
     })
 })
 
-test('Can subscribe listeners', t => {
+test('Can subscribe listeners', (t) => {
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
 
   const expected = ['param1', { other: true }]
   let count = 0
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     t.deepEqual(msg, [msgType.ON, 'myEvent'], 'Message is expected structure')
     readable.write([msgType.EMIT, 'myEvent', null, expected])
     setImmediate(() => {
@@ -173,14 +173,14 @@ test('Can subscribe listeners', t => {
   t.ok(result === client, 'Returns instance of client')
 })
 
-test('emitter.once works and sends `OFF` message', t => {
+test('emitter.once works and sends `OFF` message', (t) => {
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
 
   const expected = ['param1', { other: true }]
   let count = 0
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     if (count < 1) {
       t.deepEqual(msg, [msgType.ON, 'myEvent'], 'Message is expected structure')
       readable.write([msgType.EMIT, 'myEvent', null, expected])
@@ -201,14 +201,14 @@ test('emitter.once works and sends `OFF` message', t => {
   t.ok(result === client, 'Returns instance of client')
 })
 
-test('removeListener works and sends `OFF` message', t => {
+test('removeListener works and sends `OFF` message', (t) => {
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
   const stream = duplexify(writeable, readable, { objectMode: true })
 
   const expected = ['param1', { other: true }]
   let count = 0
-  writeable.on('data', msg => {
+  writeable.on('data', (msg) => {
     if (count < 1) {
       t.deepEqual(msg, [msgType.ON, 'myEvent'], 'Message is expected structure')
       readable.write([msgType.EMIT, 'myEvent', null, expected])
@@ -222,7 +222,7 @@ test('removeListener works and sends `OFF` message', t => {
     }
   })
   const client = CreateClient(stream)
-  const result = client.on('myEvent', function listener (...args) {
+  const result = client.on('myEvent', function listener(...args) {
     setImmediate(() => client.removeListener('myEvent', listener))
     if (count++ > 0) t.fail('Should not be called more than once')
   })

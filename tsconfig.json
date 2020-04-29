@@ -1,16 +1,15 @@
 {
   "compilerOptions": {
-      "module": "commonjs",
-      "target": "es2018",
-      "allowSyntheticDefaultImports": true,
-      "noImplicitAny": true,
-      "strictNullChecks": true,
-      "moduleResolution": "node",
-      "resolveJsonModule": true,
-      "allowJs": true,
-      "checkJs": true,
-      "noEmit": true,
-      "typeRoots": ["types", "node_modules/@types"]
-  },
-  "exclude": ["types"]
+    "module": "commonjs",
+    "target": "es2018",
+    "allowSyntheticDefaultImports": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "typeRoots": ["types", "node_modules/@types"]
+  }
 }

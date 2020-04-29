@@ -30,7 +30,7 @@ module.exports = CreateServer
  * @returns {{ close: () => void }} An object with a single method `close()`
  * that will stop the server listening to and sending any more messages
  */
-function CreateServer (handler, duplex) {
+function CreateServer(handler, duplex) {
   assert(typeof handler === 'object', 'Missing handler object.')
   assert(isStream.duplex(duplex), 'Must pass a duplex stream as first argument')
 
@@ -40,7 +40,7 @@ function CreateServer (handler, duplex) {
   duplex.on('data', handleMessage)
 
   /** @param {MsgResponse | MsgEmit} msg */
-  function send (msg) {
+  function send(msg) {
     // TODO: Do we need back pressure here? Would just result in buffering here
     // vs. buffering in the stream, so probably no
     duplex.write(msg)
@@ -51,7 +51,7 @@ function CreateServer (handler, duplex) {
    * @param {any} msg Can be any type, but we only process messages types that
    * we understand, other messages are ignored
    */
-  function handleMessage (msg) {
+  function handleMessage(msg) {
     if (!isValidMessage(msg)) return
     switch (msg[0]) {
       case msgType.REQUEST:
@@ -66,7 +66,7 @@ function CreateServer (handler, duplex) {
   }
 
   /** @param {MsgRequest} msg */
-  async function handleRequest (msg) {
+  async function handleRequest(msg) {
     const [, msgId, method, params] = msg
     /** @type {MsgResponse} */
     let response
@@ -90,7 +90,7 @@ function CreateServer (handler, duplex) {
     send(response)
 
     /** @param {import('stream').Readable} stream */
-    function handleStream (stream) {
+    function handleStream(stream) {
       // It's intentional that we do not bubble errors here. MessageStream
       // captures any error in `stream` and sends it as a message through the
       // duplex stream
@@ -99,7 +99,7 @@ function CreateServer (handler, duplex) {
   }
 
   /** @param {MsgOn} msg */
-  function handleOn (msg) {
+  function handleOn(msg) {
     const [, eventName] = msg
 
     if (!(handler instanceof EventEmitter)) {
@@ -124,7 +124,7 @@ function CreateServer (handler, duplex) {
   }
 
   /** @param {MsgOff} msg */
-  function handleOff (msg) {
+  function handleOff(msg) {
     const [, eventName] = msg
 
     // Fail silently if there is nothing to unsubscribe
@@ -144,6 +144,6 @@ function CreateServer (handler, duplex) {
         handler.removeListener(eventName, listener)
         subscriptions = new Map()
       }
-    }
+    },
   }
 }

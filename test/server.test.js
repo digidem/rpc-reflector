@@ -6,7 +6,7 @@ const duplexify = require('duplexify')
 const { CreateServer } = require('..')
 const invalidMessages = require('./fixtures/invalid-messages')
 
-test('Ignores invalid messages', t => {
+test('Ignores invalid messages', (t) => {
   t.plan(1)
   const writeable = new PassThrough({ objectMode: true })
   const readable = new PassThrough({ objectMode: true })
@@ -14,7 +14,7 @@ test('Ignores invalid messages', t => {
 
   const validOnlyForClient = [
     [1, 4, null, 'returnedValue'],
-    [4, 'eventName', null, []]
+    [4, 'eventName', null, []],
   ]
 
   writeable.on('data', () => {

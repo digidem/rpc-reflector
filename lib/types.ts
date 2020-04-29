@@ -6,7 +6,7 @@ export enum msgType {
   RESPONSE,
   ON,
   OFF,
-  EMIT
+  EMIT,
 }
 
 export type MsgRequest = [typeof msgType.REQUEST, number, string, any[]]

@@ -5,7 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "tap",
-    "type": "tsc"
+    "type": "tsc",
+    "format": "prettier --write ."
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "pretty-quick --staged"
+    }
   },
   "author": "Gregor MacLennan",
   "license": "ISC",
@@ -22,8 +28,11 @@
     "@types/tape": "^4.2.34",
     "@types/tape-async": "^2.3.0",
     "duplexify": "^4.1.1",
+    "husky": "^4.2.5",
     "into-stream": "^5.1.1",
     "p-is-promise": "^3.0.0",
+    "prettier": "^2.0.5",
+    "pretty-quick": "^2.0.1",
     "readable-error": "^1.0.0",
     "tap": "^14.10.7",
     "tape": "^4.13.2",

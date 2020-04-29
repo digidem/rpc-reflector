@@ -22,5 +22,5 @@ module.exports = [
   'Not array',
   1,
   {},
-  false
+  false,
 ]
