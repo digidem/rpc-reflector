@@ -6,7 +6,7 @@ const util = require('util')
 const isStream = require('is-stream')
 
 const { msgType } = require('./lib/constants')
-const { stringify, parse } = require('./lib/prop-array-utils')
+const { stringify, parse } = require('./lib/method-chain-utils')
 const isValidMessage = require('./lib/validate-message')
 
 /** @typedef {import('./lib/types').MsgRequest} MsgRequest */
@@ -17,6 +17,8 @@ const isValidMessage = require('./lib/validate-message')
 /** @typedef {import('./lib/types').Message} Message */
 /** @typedef {import('./lib/types').Client} Client */
 /** @typedef {import('./lib/types').SubClient} SubClient */
+/** @typedef {import('./lib/types').MethodChain} MethodChain */
+/** @typedef {(...args: any[]) => Client} GetMethodTrap */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -124,8 +126,8 @@ function createClient(stream, { timeout = 5000 } = {}) {
   }
 
   /** @param {MsgEmit} msg */
-  function handleEmit([, eventName, propArray, errorObject, args = []]) {
-    const encodedEventName = stringify(propArray, eventName)
+  function handleEmit([, eventName, methodChain, errorObject, args = []]) {
+    const encodedEventName = stringify(methodChain, eventName)
     if (errorObject) {
       Reflect.apply(emitter.emit, emitter, [
         encodedEventName,
@@ -135,7 +137,7 @@ function createClient(stream, { timeout = 5000 } = {}) {
       Reflect.apply(emitter.emit, emitter, [encodedEventName, ...args])
     }
     if (emitter.listenerCount(encodedEventName) === 0) {
-      send([msgType.OFF, eventName, propArray])
+      send([msgType.OFF, eventName, methodChain])
     }
   }
 
@@ -146,17 +148,17 @@ function createClient(stream, { timeout = 5000 } = {}) {
     emitter.removeAllListeners()
   }
 
-  return createSubClient([], {})
+  return createSubClient([])
 
   /**
-   * @param {string[]} propArray
-   * @param {Function | {}} target
+   * @param {MethodChain} methodChain
+   * @param {Promise<any> | Function} [target]
    * @returns {Client  | SubClient} */
-  function createSubClient(propArray, target) {
+  function createSubClient(methodChain, target = () => {}) {
     /** @type {ProxyHandler<any>} */
     const handler = {
       get(target, prop) {
-        if (prop === closeProp && propArray.length === 0) {
+        if (prop === closeProp && methodChain.length === 0) {
           return () => handleClose()
         }
         /* istanbul ignore if  */
@@ -166,23 +168,33 @@ function createClient(stream, { timeout = 5000 } = {}) {
         }
         if (typeof prop !== 'string') {
           throw new Error(`ReferenceError: ${String(prop)} is not defined`)
+        }
+        if (prop in target) {
+          const targetAsPromise = /** @type {Promise<any>} */ (target)
+          const promiseProp = /** @type {keyof Promise<any>} */ (prop)
+          return /** @type {(...args: any[]) => Client} */ (...args) => {
+            return createSubClient(
+              methodChain,
+              Reflect.apply(targetAsPromise[promiseProp], target, args)
+            )
+          }
         } else if (prop in EventEmitter.prototype) {
           const eventEmitterProp = /** @type {keyof EventEmitter} */ (prop)
           if (emitterSubscribeMethods.includes(prop)) {
             return /** @type {(...args: any[]) => Client} */ (...args) => {
               const originalEventName = args[0]
-              args[0] = stringify(propArray, originalEventName)
+              args[0] = stringify(methodChain, originalEventName)
               Reflect.apply(emitter[eventEmitterProp], emitter, args)
-              send([msgType.ON, originalEventName, propArray])
+              send([msgType.ON, originalEventName, methodChain])
               return proxy
             }
           } else if (emitterUnsubscribeMethods.includes(prop)) {
             return /** @type {(...args: any[]) => Client} */ (...args) => {
               const originalEventName = args[0]
-              args[0] = stringify(propArray, originalEventName)
+              args[0] = stringify(methodChain, originalEventName)
               Reflect.apply(emitter[eventEmitterProp], emitter, args)
               if (emitter.listenerCount(args[0]) === 0) {
-                send([msgType.OFF, originalEventName, propArray])
+                send([msgType.OFF, originalEventName, methodChain])
               }
               return proxy
             }
@@ -195,8 +207,8 @@ function createClient(stream, { timeout = 5000 } = {}) {
                 args
               )
               return eventNames.reduce((acc, encodedEventName) => {
-                const [eventPropArray, eventName] = parse(encodedEventName)
-                if (util.isDeepStrictEqual(eventPropArray, propArray))
+                const [eventMethodChain, eventName] = parse(encodedEventName)
+                if (util.isDeepStrictEqual(eventMethodChain, methodChain))
                   acc.push(eventName)
                 return acc
               }, /** @type {string[]} **/ ([]))
@@ -209,33 +221,36 @@ function createClient(stream, { timeout = 5000 } = {}) {
             }
           }
         }
-        return createSubClient(propArray.concat(prop), () => {})
+        return createSubClient(methodChain.concat([[prop]]))
       },
       getPrototypeOf() {
         return EventEmitter.prototype
       },
-      apply(target, thisArg, args) {
-        // We never hit this code path because the initial proxy targets an
-        // empty object, which will throw if you try to call it, but adding this
-        // to make TypeScript happy and convince TS that propArray is a
-        // non-empty array
-        if (!isNonEmptyStringArray(propArray)) {
-          throw new TypeError('[target] is not a function')
-        }
+    }
+
+    const lastInChain = methodChain[methodChain.length - 1]
+    if (lastInChain && !Array.isArray(lastInChain[1])) {
+      handler.apply = function apply(target, thisArg, args) {
+        const prop = lastInChain[0]
+        const newMethodChain = methodChain.slice(0, -1)
+        newMethodChain.push([lastInChain[0], args])
         const msgId = id++
 
         const pendingResult = new Promise((resolve, reject) => {
           pending.set(msgId, [resolve, reject])
-          send([msgType.REQUEST, msgId, propArray, args])
+          send([msgType.REQUEST, msgId, newMethodChain])
         })
 
-        return promiseTimeout(pendingResult, timeout, function fallback() {
-          // Cleanup pending handlers because they will never be called now
-          pending.delete(msgId)
-          throw new Error(`Server timed out after ${timeout}ms.
+        return createSubClient(
+          newMethodChain,
+          promiseTimeout(pendingResult, timeout, function fallback() {
+            // Cleanup pending handlers because they will never be called now
+            pending.delete(msgId)
+            throw new Error(`Server timed out after ${timeout}ms.
             The server could be closed or the transport is down.`)
-        })
-      },
+          })
+        )
+      }
     }
 
     /** @type {Client | SubClient} */

@@ -5,7 +5,7 @@ module.exports = [
   [0, 'stringID'],
   [0, 7, 'stringMethodName'],
   [0, 7, ['stringMethodName']],
-  [0, 7, ['stringMethodName', 2], []],
+  [0, 7, ['stringMethodName', 2]],
   [0, 7],
   [1],
   [1, 'stringID'],

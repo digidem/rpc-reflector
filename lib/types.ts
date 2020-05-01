@@ -3,35 +3,27 @@ import { EventEmitter } from 'events'
 
 export enum msgType {
   REQUEST = 0,
-  RESPONSE = 1,
-  ON = 2,
-  OFF = 3,
-  EMIT = 4,
+  RESPONSE,
+  ON,
+  OFF,
+  EMIT,
 }
 
 export interface test {
   foo: boolean
 }
 
-export type NonEmptyArray<T> = [T, ...T[]]
-
 type msgId = number
-type prop = string
+type propertyKey = string
 type eventName = string
-// a function arguments is not an array, but "array-like" e.g. it does not
-// support array methods
 type args = ArrayLike<any>
 type params = Array<any>
 type result = any
 type more = boolean
-type isObjectMode = boolean
+type isLast = true
 
-export type MsgRequest = [
-  typeof msgType.REQUEST,
-  msgId,
-  NonEmptyArray<prop>,
-  args
-]
+export type MethodChain = Array<[propertyKey, args?]>
+export type MsgRequest = [typeof msgType.REQUEST, msgId, MethodChain]
 // The last message in a streaming request
 type MsgResponseEnd = [
   typeof msgType.RESPONSE,
@@ -39,7 +31,7 @@ type MsgResponseEnd = [
   ErrorObject | null,
   result,
   false, // More data to come?
-  isObjectMode // Last message in streaming response indicates if was objectMode
+  isLast // Last message in streaming response indicates if was objectMode
 ]
 export type MsgResponse =
   | [
@@ -50,18 +42,50 @@ export type MsgResponse =
       more? // more data to come?
     ]
   | MsgResponseEnd
-export type MsgOn = [typeof msgType.ON, eventName, Array<prop>]
-export type MsgOff = [typeof msgType.OFF, eventName, Array<prop>]
+export type MsgOn = [typeof msgType.ON, eventName, MethodChain]
+export type MsgOff = [typeof msgType.OFF, eventName, MethodChain]
 export type MsgEmit = [
   typeof msgType.EMIT,
   eventName,
-  Array<prop>,
+  MethodChain,
   ErrorObject | null,
   params?
 ]
 export type Message = MsgRequest | MsgResponse | MsgOn | MsgOff | MsgEmit
 
-export type SubClient = ((...args: any[]) => Promise<any>) & Client
+export interface ProxyPromise<T> extends Promise<T> {
+  /**
+   * Attaches callbacks for the resolution and/or rejection of the Promise.
+   * @param onfulfilled The callback to execute when the Promise is resolved.
+   * @param onrejected The callback to execute when the Promise is rejected.
+   * @returns A Promise for the completion of which ever callback is executed.
+   */
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?:
+      | ((value: T) => TResult1 | PromiseLike<TResult1>)
+      | undefined
+      | null,
+    onrejected?:
+      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
+      | undefined
+      | null
+  ): ProxyPromise<TResult1 | TResult2> & Client
+
+  /**
+   * Attaches a callback for only the rejection of the Promise.
+   * @param onrejected The callback to execute when the Promise is rejected.
+   * @returns A Promise for the completion of the callback.
+   */
+  catch<TResult = never>(
+    onrejected?:
+      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | undefined
+      | null
+  ): ProxyPromise<T | TResult> & Client
+}
+
+export type SubClient = ((...args: any[]) => ProxyPromise<any> & Client) &
+  Client
 
 interface AnyMethod {
   [method: string]: SubClient

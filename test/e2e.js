@@ -135,7 +135,7 @@ test('Calls methods on server', async (t) => {
 
 test('Nested properties and methods', async (t) => {
   const { client } = setup(myApi)
-  t.plan(14)
+  t.plan(17)
   t.equal(await client.namespace.sub(5, 2), 3, 'nested method works')
   t.equal(await client.deep.nested.mult(2, 3), 6, 'deep nested works')
   try {
@@ -145,7 +145,7 @@ test('Nested properties and methods', async (t) => {
     t.true(error instanceof Error, 'Calling missing method threw')
     t.equal(
       error.message,
-      'missingMethod is not a function',
+      '[target].namespace.missingMethod is not a function',
       'Error message as expected'
     )
   }
@@ -156,7 +156,7 @@ test('Nested properties and methods', async (t) => {
     t.true(error instanceof Error, 'Calling with missing namespace threw')
     t.equal(
       error.message,
-      'missingNameSpace is not defined',
+      '[target].deep.missingNameSpace.sub is not a function',
       'Error message as expected'
     )
   }
@@ -173,13 +173,33 @@ test('Nested properties and methods', async (t) => {
     t.ok(error.message.match('undefined'), 'Error message as expected')
   }
   try {
+    let horsePromise
+    // Need to await this separately, because otherwise the rejection is not caught
+    horsePromise = client.deep.missingNameSpace('horse').catch((error) => {
+      t.equal(
+        error.message,
+        '[target].deep.missingNameSpace is not a function',
+        'Error message as expected'
+      )
+    })
+    await horsePromise.sub('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling with missing namespace threw')
+    t.equal(
+      error.message,
+      '[target].deep.missingNameSpace("horse").sub is not a function',
+      'Error message as expected'
+    )
+  }
+  try {
     await client.prop('donkey?')
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling prop as method fails')
     t.equal(
       error.message,
-      'prop is not a function',
+      '[target].prop is not a function',
       'Error message as expected'
     )
   }
@@ -190,7 +210,7 @@ test('Nested properties and methods', async (t) => {
     t.true(error instanceof Error, 'Calling method on prop fails')
     t.equal(
       error.message,
-      'oops is not a function',
+      '[target].prop.oops is not a function',
       'Error message as expected'
     )
   }
@@ -201,7 +221,7 @@ test('Nested properties and methods', async (t) => {
     t.true(error instanceof Error, 'Calling nested prop as method fails')
     t.equal(
       error.message,
-      'prop is not a function',
+      '[target].namespace.prop is not a function',
       'Error message as expected'
     )
   }
@@ -217,7 +237,7 @@ test('Calling non-existant methods rejects with error', async (t) => {
     t.true(error instanceof Error, 'Threw with error')
     t.equal(
       error.message,
-      'missingMethod is not a function',
+      '[target].missingMethod is not a function',
       'Error message as expected'
     )
   }
@@ -242,6 +262,9 @@ test('The server ignores subscribe and unsubscribe when handler is not an EventE
   client.off('myEvent', t.fail)
   client.namespace.on('myEvent', t.fail)
   client.namespace.off('myEvent', t.fail)
+  const p = client.method().catch(t.pass)
+  await p
+  p.on('myEvent', t.fail)
   setTimeout(t.end, 200)
 })
 
@@ -269,6 +292,25 @@ test('Nested props are emitters', (t) => {
     'nested prop is an event emitter'
   )
   client.namespace.on('myEvent', (...args) => {
+    t.deepEqual(args, expected)
+    t.end()
+  })
+  process.nextTick(() => {
+    // eslint-disable-next-line no-useless-call
+    emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
+  })
+})
+
+test('Nested methods are emitters', (t) => {
+  t.plan(2)
+  const emitterApi = new EventEmitter()
+  const { client } = setup({ namespace: () => emitterApi })
+  const expected = ['param1', { other: true }]
+  t.true(
+    client.namespace() instanceof EventEmitter,
+    'nested prop is an event emitter'
+  )
+  client.namespace().on('myEvent', (...args) => {
     t.deepEqual(args, expected)
     t.end()
   })
@@ -401,13 +443,15 @@ test('Closing server removes nested event listeners on server', (t) => {
   const emitterApi = new EventEmitter()
   const { client, server } = setup({
     nested: emitterApi,
+    nestedMethod: () => emitterApi,
   })
 
   client.nested.on('myEvent', () => {})
   client.nested.on('otherEvent', () => {})
+  client.nestedMethod().on('else', () => {})
 
   setTimeout(() => {
-    t.equal(emitterApi.eventNames().length, 2)
+    t.equal(emitterApi.eventNames().length, 3)
     server.close()
     t.equal(emitterApi.eventNames().length, 0)
     t.end()

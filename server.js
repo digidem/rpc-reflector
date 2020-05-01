@@ -1,12 +1,16 @@
+const EventEmitter = require('events').EventEmitter
 const assert = require('assert')
 const { serializeError } = require('serialize-error')
 const isStream = require('is-stream')
 
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
-const { parse, stringify } = require('./lib/prop-array-utils')
+const {
+  parse,
+  stringify,
+  getMethodString,
+} = require('./lib/method-chain-utils')
 const MessageStream = require('./lib/message-stream')
-const { EventEmitter } = require('events')
 
 /** @typedef {import('./lib/types').MsgRequest} MsgRequest */
 /** @typedef {import('./lib/types').MsgResponse} MsgResponse */
@@ -14,7 +18,7 @@ const { EventEmitter } = require('events')
 /** @typedef {import('./lib/types').MsgOff} MsgOff */
 /** @typedef {import('./lib/types').MsgEmit} MsgEmit */
 /** @typedef {import('./lib/types').Message} Message */
-/** @typedef {import('./lib/types').NonEmptyArray<string>} NonEmptyStringArray */
+/** @typedef {import('./lib/types').MethodChain} MethodChain */
 
 module.exports = createServer
 
@@ -68,13 +72,13 @@ function createServer(handler, duplex) {
   }
 
   /** @param {MsgRequest} msg */
-  async function handleRequest([, msgId, propArray, args]) {
+  async function handleRequest([, msgId, methodChain]) {
     /** @type {MsgResponse} */
     let response
 
     try {
       const result = await Promise.resolve(
-        applyNestedMethod(handler, propArray, args)
+        applyMethodChain(handler, methodChain)
       )
       if (isStream.readable(result)) {
         return handleStream(result)
@@ -96,15 +100,16 @@ function createServer(handler, duplex) {
   }
 
   /** @param {MsgOn} msg */
-  function handleOn([, eventName, propArray]) {
-    let emitter
-    try {
-      emitter = getNestedEventEmitter(handler, propArray)
-    } catch (e) {
-      return console.warn(e + '. (Subscription from client was ignored)')
+  function handleOn([, eventName, methodChain]) {
+    const method = getMethod(handler, methodChain)
+    if (!(method instanceof EventEmitter)) {
+      return console.warn(
+        `${getMethodString(
+          methodChain
+        )} is not an EventEmitter, so it does not support adding listeners. (Subscription from client was ignored)`
+      )
     }
-
-    const encodedEventName = stringify(propArray, eventName)
+    const encodedEventName = stringify(methodChain, eventName)
 
     // If we are already emitting for this event, we can ignore
     if (subscriptions.has(encodedEventName)) return
@@ -112,31 +117,32 @@ function createServer(handler, duplex) {
     /** @type {(...args: any[]) => void} */
     const listener = (...args) => {
       if (args.length === 1 && args[0] instanceof Error) {
-        send([msgType.EMIT, eventName, propArray, serializeError(args[0])])
+        send([msgType.EMIT, eventName, methodChain, serializeError(args[0])])
       } else {
-        send([msgType.EMIT, eventName, propArray, null, args])
+        send([msgType.EMIT, eventName, methodChain, null, args])
       }
     }
     subscriptions.set(encodedEventName, listener)
-    emitter.on(eventName, listener)
+    method.on(eventName, listener)
   }
 
   /** @param {MsgOff} msg */
-  function handleOff([, eventName, propArray]) {
-    let emitter
-    try {
-      emitter = getNestedEventEmitter(handler, propArray)
-    } catch (e) {
-      return console.warn(e + '. (Subscription from client was ignored)')
+  function handleOff([, eventName, methodChain]) {
+    const method = getMethod(handler, methodChain)
+    if (!(method instanceof EventEmitter)) {
+      return console.warn(
+        `${getMethodString(
+          methodChain
+        )} is not an EventEmitter, so it does not support adding listeners. (Subscription from client was ignored)`
+      )
     }
-
-    const encodedEventName = stringify(propArray, eventName)
+    const encodedEventName = stringify(methodChain, eventName)
 
     // Fail silently if there is nothing to unsubscribe
     if (!subscriptions.has(encodedEventName)) return
 
     const listener = subscriptions.get(encodedEventName)
-    listener && emitter.removeListener(eventName, listener)
+    listener && method.removeListener(eventName, listener)
     subscriptions.delete(encodedEventName)
   }
 
@@ -144,11 +150,9 @@ function createServer(handler, duplex) {
     close: () => {
       duplex.removeListener('data', handleMessage)
       for (const [encodedEventName, listener] of subscriptions.entries()) {
-        const [propArray, eventName] = parse(encodedEventName)
-        try {
-          const emitter = getNestedEventEmitter(handler, propArray)
-          emitter.removeListener(eventName, listener)
-        } catch (e) {}
+        const [methodChain, eventName] = parse(encodedEventName)
+        const method = getMethod(handler, methodChain)
+        method && method.removeListener(eventName, listener)
       }
       subscriptions = new Map()
     },
@@ -160,53 +164,57 @@ function createServer(handler, duplex) {
  * Calls a deeply nested property function. Throws a TypeError if not a function
  *
  * @param {{[propertyKey: string]: any}} target
- * @param {NonEmptyStringArray} propArray
- * @param {ArrayLike<any>} args
+ * @param {MethodChain} methodChain
  * @returns {any}
  */
-function applyNestedMethod(target, propArray, args) {
-  let nested = target
-  for (const propertyKey of propArray.slice(0, -1)) {
-    if (!Reflect.has(nested, propertyKey)) {
-      throw new ReferenceError(`${propertyKey} is not defined`)
+function applyMethodChain(target, methodChain) {
+  try {
+    let nested = target
+    for (const [propertyKey, args] of methodChain.slice(0, -1)) {
+      if (!Reflect.has(nested, propertyKey)) {
+        throw new TypeError('is not a function')
+      }
+      if (args) {
+        if (typeof nested[propertyKey] !== 'function') {
+          throw new TypeError('is not a function')
+        }
+        nested = Reflect.apply(nested[propertyKey], nested, args)
+      }
+      nested = nested[propertyKey]
     }
-    nested = nested[propertyKey]
+    const [propertyKey, args = []] = methodChain[methodChain.length - 1]
+    return Reflect.apply(nested[propertyKey], nested, args)
+  } catch (e) {
+    if (e instanceof TypeError && e.message.includes('not a function')) {
+      throw new TypeError(`${getMethodString(methodChain)} is not a function`)
+    } else {
+      throw e
+    }
   }
-  const propertyKey = propArray[propArray.length - 1]
-  if (typeof nested === 'undefined') {
-    throw new TypeError(`Cannot read property '${propertyKey}' of undefined`)
-  }
-  if (nested === null) {
-    throw new TypeError(`Cannot read property '${propertyKey}' of null`)
-  }
-  if (typeof nested[propertyKey] !== 'function') {
-    throw new TypeError(`${propertyKey} is not a function`)
-  }
-  return Reflect.apply(nested[propertyKey], nested, args)
 }
 
 /**
  * @private
- * Returns a deeply nested event emitter
+ * Returns a deeply nested property
  *
  * @param {{[propertyKey: string]: any}} target
- * @param {string[]} propArray
- * @returns {EventEmitter}
+ * @param {MethodChain} methodChain
+ * @returns {any}
  */
-function getNestedEventEmitter(target, propArray) {
-  let nested = target
-  for (const propertyKey of propArray) {
-    if (!Reflect.has(nested, propertyKey)) {
-      throw new ReferenceError(`${propertyKey} is not defined`)
+function getMethod(target, methodChain) {
+  if (methodChain.length === 0) return target
+  try {
+    let nested = target
+    for (const [propertyKey, args] of methodChain) {
+      if (!Reflect.has(nested, propertyKey)) {
+        throw new TypeError('is not a function')
+      }
+      if (args) {
+        nested = Reflect.apply(nested[propertyKey], nested, args)
+      } else {
+        nested = nested[propertyKey]
+      }
     }
-    nested = nested[propertyKey]
-  }
-  if (!(nested instanceof EventEmitter)) {
-    throw new TypeError(
-      `${
-        propArray.length === 0 ? '[target]' : propArray[propArray.length - 1]
-      } is not an EventEmitter`
-    )
-  }
-  return nested
+    return nested
+  } catch (e) {}
 }
