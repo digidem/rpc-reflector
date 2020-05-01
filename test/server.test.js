@@ -14,7 +14,14 @@ test('Ignores invalid messages', (t) => {
 
   const validOnlyForClient = [
     [1, 4, null, 'returnedValue'],
-    [4, 'eventName', null, []],
+    [1, 4, null, Buffer.from('returnedValue')],
+    [1, 4, null, Buffer.from('returnedValue'), true],
+    [1, 4, null, null, false, true],
+    [1, 5, { message: 'Error message' }],
+    [1, 6, null],
+    [4, 'eventName', [], null, []],
+    [4, 'eventName', [['method']], null, ['param1', { other: 'param' }]],
+    [4, 'eventName', [], { message: 'Error Message' }],
   ]
 
   writeable.on('data', () => {

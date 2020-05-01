@@ -1,12 +1,8 @@
-// @ts-nocheck
 const test = require('tape-async')
-const { EventEmitter } = require('events')
-const pIsPromise = require('p-is-promise')
 const { PassThrough } = require('stream')
 const duplexify = require('duplexify')
 
 const { createClient } = require('..')
-const isValidMessage = require('../lib/validate-message')
 const { msgType } = require('../lib/constants')
 const invalidMessages = require('./fixtures/invalid-messages')
 
@@ -39,14 +35,18 @@ test('Ignores invalid messages', (t) => {
   const stream = duplexify(writeable, readable, { objectMode: true })
 
   const validOnlyForServer = [
-    [0, 2, 'anyMethod', []],
-    [2, 'eventName'],
-    [3, 'eventName'],
+    [0, 2, [['anyMethod', []]]],
+    [0, 3, [['anyMethod', ['param2', { other: 'param' }]]]],
+    [2, 'eventName', []],
+    [3, 'eventName', [['method']]],
   ]
 
   writeable.on('data', (outgoingMsg) => {
+    // @ts-ignore
     for (const msg of invalidMessages.concat(validOnlyForServer)) {
+      // @ts-ignore
       if (typeof msg[1] === 'number') {
+        // @ts-ignore
         msg[1] = outgoingMsg[1]
       }
       readable.write(msg)

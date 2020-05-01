@@ -135,7 +135,7 @@ test('Calls methods on server', async (t) => {
 
 test('Nested properties and methods', async (t) => {
   const { client } = setup(myApi)
-  t.plan(12)
+  t.plan(14)
   t.equal(await client.namespace.sub(5, 2), 3, 'nested method works')
   t.equal(await client.deep.nested.mult(2, 3), 6, 'deep nested works')
   try {
@@ -143,35 +143,67 @@ test('Nested properties and methods', async (t) => {
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling missing method threw')
-    t.equal(error.message, 'Method not supported', 'Error message as expected')
+    t.equal(
+      error.message,
+      'missingMethod is not a function',
+      'Error message as expected'
+    )
   }
   try {
     await client.deep.missingNameSpace.sub('donkey?')
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling with missing namespace threw')
-    t.equal(error.message, 'Method not supported', 'Error message as expected')
+    t.equal(
+      error.message,
+      'missingNameSpace is not defined',
+      'Error message as expected'
+    )
+  }
+  try {
+    let horse
+    // Need to await this separately, because otherwise the rejection is not caught
+    try {
+      horse = await client.deep.missingNameSpace('horse')
+    } catch (e) {}
+    await horse.sub('donkey?')
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Calling with missing namespace threw')
+    t.ok(error.message.match('undefined'), 'Error message as expected')
   }
   try {
     await client.prop('donkey?')
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling prop as method fails')
-    t.equal(error.message, 'Method not supported', 'Error message as expected')
+    t.equal(
+      error.message,
+      'prop is not a function',
+      'Error message as expected'
+    )
   }
   try {
     await client.prop.oops('donkey?')
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling method on prop fails')
-    t.equal(error.message, 'Method not supported', 'Error message as expected')
+    t.equal(
+      error.message,
+      'oops is not a function',
+      'Error message as expected'
+    )
   }
   try {
     await client.namespace.prop('donkey?')
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling nested prop as method fails')
-    t.equal(error.message, 'Method not supported', 'Error message as expected')
+    t.equal(
+      error.message,
+      'prop is not a function',
+      'Error message as expected'
+    )
   }
 })
 
@@ -183,7 +215,11 @@ test('Calling non-existant methods rejects with error', async (t) => {
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Threw with error')
-    t.equal(error.message, 'Method not supported', 'Error message as expected')
+    t.equal(
+      error.message,
+      'missingMethod is not a function',
+      'Error message as expected'
+    )
   }
   t.end()
 })
@@ -200,11 +236,12 @@ test('Closed server does not respond, client times out', async (t) => {
   t.end()
 })
 
-test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', (t) => {
+test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', async (t) => {
   const { client, clientStream } = setup({})
   client.on('myEvent', t.fail)
   client.off('myEvent', t.fail)
-  clientStream.on('data', t.fail)
+  client.namespace.on('myEvent', t.fail)
+  client.namespace.off('myEvent', t.fail)
   setTimeout(t.end, 200)
 })
 
@@ -222,18 +259,23 @@ test('Subscribes to events on server', (t) => {
   })
 })
 
-test('Nested props are not emitters', (t) => {
+test('Nested props are emitters', (t) => {
   t.plan(2)
   const emitterApi = new EventEmitter()
-  const { client } = setup(emitterApi)
-  t.false(
+  const { client } = setup({ namespace: emitterApi })
+  const expected = ['param1', { other: true }]
+  t.true(
     client.namespace instanceof EventEmitter,
-    'nested prop is not event emitter'
+    'nested prop is an event emitter'
   )
-  t.throws(
-    () => client.namespace.on('any', () => {}),
-    "Can't subscribe to events on nested props"
-  )
+  client.namespace.on('myEvent', (...args) => {
+    t.deepEqual(args, expected)
+    t.end()
+  })
+  process.nextTick(() => {
+    // eslint-disable-next-line no-useless-call
+    emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
+  })
 })
 
 test('Unsubscribes to events', (t) => {
@@ -329,9 +371,14 @@ test('Other EventEmitter methods work', (t) => {
   const noop = () => {}
   client.on('myEvent', noop)
   t.deepEqual(client.eventNames(), ['myEvent'])
-  client.setMaxListeners(5)
-  t.equal(client.getMaxListeners(), 5)
-  t.equal(client.rawListeners('myEvent')[0], noop)
+  t.equal(
+    client.getMaxListeners(),
+    emitterApi.getMaxListeners(),
+    'getMaxListeners() works'
+  )
+  // client.setMaxListeners(5)
+  // t.equal(client.getMaxListeners(), 5)
+  // t.equal(client.rawListeners('myEvent')[0], noop)
   t.end()
 })
 
@@ -341,6 +388,23 @@ test('Closing server removes event listeners on server', (t) => {
 
   client.on('myEvent', () => {})
   client.on('otherEvent', () => {})
+
+  setTimeout(() => {
+    t.equal(emitterApi.eventNames().length, 2)
+    server.close()
+    t.equal(emitterApi.eventNames().length, 0)
+    t.end()
+  }, 200)
+})
+
+test('Closing server removes nested event listeners on server', (t) => {
+  const emitterApi = new EventEmitter()
+  const { client, server } = setup({
+    nested: emitterApi,
+  })
+
+  client.nested.on('myEvent', () => {})
+  client.nested.on('otherEvent', () => {})
 
   setTimeout(() => {
     t.equal(emitterApi.eventNames().length, 2)
@@ -372,5 +436,7 @@ test('console.log on client does not throw', (t) => {
   const { client } = setup(myApi)
   // This was throwing without a trap for util.inspect.custom
   t.doesNotThrow(() => console.log(client))
+  t.doesNotThrow(() => console.log(client.add))
+  t.doesNotThrow(() => console.log(client.add()))
   t.end()
 })

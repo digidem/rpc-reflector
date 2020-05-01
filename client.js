@@ -6,6 +6,7 @@ const util = require('util')
 const isStream = require('is-stream')
 
 const { msgType } = require('./lib/constants')
+const { stringify, parse } = require('./lib/prop-array-utils')
 const isValidMessage = require('./lib/validate-message')
 
 /** @typedef {import('./lib/types').MsgRequest} MsgRequest */
@@ -15,7 +16,7 @@ const isValidMessage = require('./lib/validate-message')
 /** @typedef {import('./lib/types').MsgEmit} MsgEmit */
 /** @typedef {import('./lib/types').Message} Message */
 /** @typedef {import('./lib/types').Client} Client */
-/** @typedef {(...args: any[]) => Client} GetMethodTrap */
+/** @typedef {import('./lib/types').SubClient} SubClient */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -77,14 +78,13 @@ function createClient(stream, { timeout = 5000 } = {}) {
   }
 
   /** @param {MsgResponse} msg */
-  function handleResponse(msg) {
-    const resolveReject = pending.get(msg[1])
+  function handleResponse([, msgId, errorObject, value, more, objectMode]) {
+    const resolveReject = pending.get(msgId)
     if (!resolveReject) {
       return console.warn(
-        `Received unknown message ID: ${msg[1]}. (Message was ignored)`
+        `Received unknown message ID: ${msgId}. (Message was ignored)`
       )
     }
-    const [, msgId, errorObject, value, more, objectMode] = msg
     const [resolve, reject] = resolveReject
 
     if (errorObject) {
@@ -117,69 +117,116 @@ function createClient(stream, { timeout = 5000 } = {}) {
         )
         collector.delete(msgId)
       } else {
-        // If objectMode stream, return array of chunks from stream
-        resolve(objectMode ? [value] : value)
+        resolve(value)
       }
       pending.delete(msgId)
     }
   }
 
   /** @param {MsgEmit} msg */
-  function handleEmit(msg) {
-    const [, eventName, errorObject, args = []] = msg
+  function handleEmit([, eventName, propArray, errorObject, args = []]) {
+    const encodedEventName = stringify(propArray, eventName)
     if (errorObject) {
       Reflect.apply(emitter.emit, emitter, [
-        eventName,
+        encodedEventName,
         deserializeError(errorObject),
       ])
     } else {
-      Reflect.apply(emitter.emit, emitter, [eventName, ...args])
+      Reflect.apply(emitter.emit, emitter, [encodedEventName, ...args])
     }
-    if (emitter.listenerCount(eventName) === 0) {
-      send([msgType.OFF, eventName])
+    if (emitter.listenerCount(encodedEventName) === 0) {
+      send([msgType.OFF, eventName, propArray])
     }
   }
 
   function handleClose() {
     stream.off('data', handleMessage)
+    // TODO: Should we do this? Or leave it to the user? It's considered "bad
+    // practice" to do this
+    emitter.removeAllListeners()
   }
 
-  /** @type {(keys?: string[]) => ProxyHandler<any>} */
-  const createHandler = (keys = []) => ({
-    get(target, prop, receiver) {
-      if (prop === closeProp && keys.length === 0) return () => handleClose()
-      if (typeof prop !== 'string') {
-        throw new Error(`ReferenceError: ${String(prop)} is not defined`)
-      }
-      return new Proxy(receiver, createHandler(keys.concat([prop])))
-    },
-    apply(target, thisArg, args) {
-      const prop = keys[keys.length - 1]
+  return createSubClient([], {})
 
-      if (prop in emitter) {
-        if (keys.length > 1)
-          throw new Error(
-            'Currently event emitters are only supported on base object'
-          )
-        const eventEmitterProp = /** @type {keyof EventEmitter} */ (prop)
-        if (emitterSubscribeMethods.includes(prop)) {
-          Reflect.apply(emitter[eventEmitterProp], emitter, args)
-          send([msgType.ON, args[0]])
-        } else if (emitterUnsubscribeMethods.includes(prop)) {
-          Reflect.apply(emitter[eventEmitterProp], emitter, args)
-          if (emitter.listenerCount(args[0]) === 0) {
-            send([msgType.OFF, args[0]])
-          }
-        } else {
-          return Reflect.apply(emitter[eventEmitterProp], emitter, args)
+  /**
+   * @param {string[]} propArray
+   * @param {Function | {}} target
+   * @returns {Client  | SubClient} */
+  function createSubClient(propArray, target) {
+    /** @type {ProxyHandler<any>} */
+    const handler = {
+      get(target, prop) {
+        if (prop === closeProp && propArray.length === 0) {
+          return () => handleClose()
         }
-        return emitter
-      } else {
+        /* istanbul ignore if  */
+        if (prop === util.inspect.custom) {
+          // Only Node < 12, not called in browsers
+          return () => '[rpcProxyClient]'
+        }
+        if (typeof prop !== 'string') {
+          throw new Error(`ReferenceError: ${String(prop)} is not defined`)
+        } else if (prop in EventEmitter.prototype) {
+          const eventEmitterProp = /** @type {keyof EventEmitter} */ (prop)
+          if (emitterSubscribeMethods.includes(prop)) {
+            return /** @type {(...args: any[]) => Client} */ (...args) => {
+              const originalEventName = args[0]
+              args[0] = stringify(propArray, originalEventName)
+              Reflect.apply(emitter[eventEmitterProp], emitter, args)
+              send([msgType.ON, originalEventName, propArray])
+              return proxy
+            }
+          } else if (emitterUnsubscribeMethods.includes(prop)) {
+            return /** @type {(...args: any[]) => Client} */ (...args) => {
+              const originalEventName = args[0]
+              args[0] = stringify(propArray, originalEventName)
+              Reflect.apply(emitter[eventEmitterProp], emitter, args)
+              if (emitter.listenerCount(args[0]) === 0) {
+                send([msgType.OFF, originalEventName, propArray])
+              }
+              return proxy
+            }
+          } else if (prop === 'eventNames') {
+            return /** @type {(...args: any[]) => string[]} */ (...args) => {
+              /** @type {string[]} */
+              const eventNames = Reflect.apply(
+                emitter[eventEmitterProp],
+                emitter,
+                args
+              )
+              return eventNames.reduce((acc, encodedEventName) => {
+                const [eventPropArray, eventName] = parse(encodedEventName)
+                if (util.isDeepStrictEqual(eventPropArray, propArray))
+                  acc.push(eventName)
+                return acc
+              }, /** @type {string[]} **/ ([]))
+            }
+          } else {
+            return /** @type {(...args: any[]) => Client} */ (...args) => {
+              // TODO: These methods will not return expected results due to the
+              // overloading of the single event emitter to emulate multiple
+              return Reflect.apply(emitter[eventEmitterProp], emitter, args)
+            }
+          }
+        }
+        return createSubClient(propArray.concat(prop), () => {})
+      },
+      getPrototypeOf() {
+        return EventEmitter.prototype
+      },
+      apply(target, thisArg, args) {
+        // We never hit this code path because the initial proxy targets an
+        // empty object, which will throw if you try to call it, but adding this
+        // to make TypeScript happy and convince TS that propArray is a
+        // non-empty array
+        if (!isNonEmptyStringArray(propArray)) {
+          throw new TypeError('[target] is not a function')
+        }
         const msgId = id++
 
         const pendingResult = new Promise((resolve, reject) => {
           pending.set(msgId, [resolve, reject])
-          send([msgType.REQUEST, msgId, keys, args])
+          send([msgType.REQUEST, msgId, propArray, args])
         })
 
         return promiseTimeout(pendingResult, timeout, function fallback() {
@@ -188,16 +235,14 @@ function createClient(stream, { timeout = 5000 } = {}) {
           throw new Error(`Server timed out after ${timeout}ms.
             The server could be closed or the transport is down.`)
         })
-      }
-    },
-    getPrototypeOf() {
-      return keys.length ? null : EventEmitter.prototype
-    },
-  })
+      },
+    }
 
-  const proxy = new Proxy(() => {}, createHandler())
+    /** @type {Client | SubClient} */
+    const proxy = new Proxy(target, handler)
 
-  return proxy
+    return proxy
+  }
 }
 
 /**
@@ -223,4 +268,12 @@ function concatStreamedResponse(streamedResponse) {
     return /** @type {string[]} */ (streamedResponse).join('')
   }
   return Buffer.concat(/** @type {Buffer[]} */ (streamedResponse))
+}
+
+/**
+ * @param {string[]} arr
+ * @returns {arr is import('./lib/types').NonEmptyArray<string>}
+ */
+function isNonEmptyStringArray(arr) {
+  return arr.length > 0
 }

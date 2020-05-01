@@ -22,7 +22,8 @@
     "length-prefixed-stream": "^2.0.0",
     "p-timeout": "^3.2.0",
     "serialize-error": "^6.0.0",
-    "through2": "^3.0.1"
+    "through2": "^3.0.1",
+    "validate.io-array-like": "^1.0.2"
   },
   "devDependencies": {
     "@types/concat-stream": "^1.6.0",
