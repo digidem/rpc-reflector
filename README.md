@@ -61,7 +61,7 @@ const myApiOnClient = createClient(clientStream)(async () => {
 
 ## Maintainers
 
-[@digidem](https://github.com/digidem)
+[@gmaclennan](https://github.com/gmaclennan)
 
 ## Contributing
 
