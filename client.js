@@ -196,8 +196,9 @@ function createClient(stream, { timeout = 5000 } = {}) {
               )
               return eventNames.reduce((acc, encodedEventName) => {
                 const [eventPropArray, eventName] = parse(encodedEventName)
-                if (util.isDeepStrictEqual(eventPropArray, propArray))
+                if (util.isDeepStrictEqual(eventPropArray, propArray)) {
                   acc.push(eventName)
+                }
                 return acc
               }, /** @type {string[]} **/ ([]))
             }
@@ -219,6 +220,7 @@ function createClient(stream, { timeout = 5000 } = {}) {
         // empty object, which will throw if you try to call it, but adding this
         // to make TypeScript happy and convince TS that propArray is a
         // non-empty array
+        /* istanbul ignore if  */
         if (!isNonEmptyStringArray(propArray)) {
           throw new TypeError('[target] is not a function')
         }
