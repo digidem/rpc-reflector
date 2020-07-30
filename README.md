@@ -1,5 +1,7 @@
 # rpc-reflector
 
+![Node.js CI](https://github.com/gmaclennan/rpc-reflector/workflows/Node.js%20CI/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/gmaclennan/rpc-reflector/badge.svg)](https://coveralls.io/github/gmaclennan/rpc-reflector)
 [![standard-readme compliant](https://img.shields.io/badge/standard--readme-OK-green.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
 Call methods on any object over RPC with minimal fuss.
