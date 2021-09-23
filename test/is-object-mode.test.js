@@ -8,9 +8,11 @@ test('Detects if ReadableStream is in objectMode', (t) => {
   t.false(isObjectMode(new Readable()), 'detects not objectMode')
   // readable-stream@3 is the same as Node 10 streams, above tests Node 12 streams
   t.true(
+    // @ts-ignore
     isObjectMode(new Readable3({ objectMode: true })),
     'detects objectMode'
   )
+  // @ts-ignore
   t.false(isObjectMode(new Readable3()), 'detects not objectMode')
   t.end()
 })
