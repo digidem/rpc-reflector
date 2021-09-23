@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "tap --no-check-coverage",
-    "coverage": "mkdir -p coverage && tap --coverage-report=text-lcov > ./coverage/lcov.info",
+    "coverage": "mkdir -p coverage && tap --no-check-coverage --coverage-report=text-lcov > ./coverage/lcov.info",
     "type": "tsc",
     "format": "prettier --write ."
   },
