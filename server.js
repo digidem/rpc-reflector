@@ -173,16 +173,23 @@ function applyNestedMethod(target, propArray, args) {
     nested = nested[propertyKey]
   }
   const propertyKey = propArray[propArray.length - 1]
-  if (typeof nested === 'undefined') {
-    throw new TypeError(`Cannot read property '${propertyKey}' of undefined`)
-  }
   if (nested === null) {
     throw new TypeError(`Cannot read property '${propertyKey}' of null`)
   }
-  if (typeof nested[propertyKey] !== 'function') {
-    throw new TypeError(`${propertyKey} is not a function`)
+  if (typeof nested === 'object') {
+    if (!Reflect.has(nested, propertyKey)) {
+      throw new ReferenceError(`${propertyKey} is not defined`)
+    }
+  } else if (typeof nested[propertyKey] === 'undefined') {
+    throw new ReferenceError(`${propertyKey} is not defined`)
   }
-  return Reflect.apply(nested[propertyKey], nested, args)
+  if (typeof nested[propertyKey] === 'function') {
+    return Reflect.apply(nested[propertyKey], nested, args)
+  }
+  if (typeof nested[propertyKey] === 'symbol') {
+    throw new TypeError(`Property '${propertyKey}' is a Symbol`)
+  }
+  return nested[propertyKey]
 }
 
 /**

@@ -20,6 +20,15 @@ const myApi = {
     return a + b
   },
   prop: 'foo',
+  objectProp: {
+    foo: 'bar',
+  },
+  arrayProp: [1, 2, 3],
+  booleanProp: true,
+  symbolProp: Symbol('foo'),
+  nullProp: null,
+  undefinedProp: undefined,
+  numberProp: 42,
   namespace: {
     sub(a, b) {
       return a - b
@@ -133,9 +142,9 @@ test('Calls methods on server', async (t) => {
   }
 })
 
-test('Nested properties and methods', async (t) => {
+test('Nested methods', async (t) => {
   const { client } = setup(myApi)
-  t.plan(14)
+  t.plan(10)
   t.equal(await client.namespace.sub(5, 2), 3, 'nested method works')
   t.equal(await client.deep.nested.mult(2, 3), 6, 'deep nested works')
   try {
@@ -145,7 +154,7 @@ test('Nested properties and methods', async (t) => {
     t.true(error instanceof Error, 'Calling missing method threw')
     t.equal(
       error.message,
-      'missingMethod is not a function',
+      'missingMethod is not defined',
       'Error message as expected'
     )
   }
@@ -173,37 +182,11 @@ test('Nested properties and methods', async (t) => {
     t.ok(error.message.match('undefined'), 'Error message as expected')
   }
   try {
-    await client.prop('donkey?')
-    t.fail('Should not get here')
-  } catch (error) {
-    t.true(error instanceof Error, 'Calling prop as method fails')
-    t.equal(
-      error.message,
-      'prop is not a function',
-      'Error message as expected'
-    )
-  }
-  try {
     await client.prop.oops('donkey?')
     t.fail('Should not get here')
   } catch (error) {
     t.true(error instanceof Error, 'Calling method on prop fails')
-    t.equal(
-      error.message,
-      'oops is not a function',
-      'Error message as expected'
-    )
-  }
-  try {
-    await client.namespace.prop('donkey?')
-    t.fail('Should not get here')
-  } catch (error) {
-    t.true(error instanceof Error, 'Calling nested prop as method fails')
-    t.equal(
-      error.message,
-      'prop is not a function',
-      'Error message as expected'
-    )
+    t.equal(error.message, 'oops is not defined', 'Error message as expected')
   }
 })
 
@@ -217,7 +200,7 @@ test('Calling non-existant methods rejects with error', async (t) => {
     t.true(error instanceof Error, 'Threw with error')
     t.equal(
       error.message,
-      'missingMethod is not a function',
+      'missingMethod is not defined',
       'Error message as expected'
     )
   }
@@ -234,6 +217,101 @@ test('Closed server does not respond, client times out', async (t) => {
     t.true(error.message.includes('timed out'), 'Error message as expected')
   }
   t.end()
+})
+
+test('Properties can be accessed as async functions', async (t) => {
+  const { client } = setup(myApi)
+  const transferrableProps = [
+    'prop',
+    'objectProp',
+    'arrayProp',
+    'booleanProp',
+    'nullProp',
+    'undefinedProp',
+    'numberProp',
+  ]
+  t.plan(transferrableProps.length)
+  for (const prop of transferrableProps) {
+    t.deepEqual(
+      await client[prop](),
+      myApi[prop],
+      'property returns promise that resolves to property value'
+    )
+  }
+})
+
+test('Cannot call non-existent methods on properties', async (t) => {
+  const { client } = setup(myApi)
+  const transferrableProps = [
+    'prop',
+    'objectProp',
+    'arrayProp',
+    'booleanProp',
+    'nullProp',
+    'undefinedProp',
+    'numberProp',
+  ]
+  t.plan(transferrableProps.length)
+  for (const prop of transferrableProps) {
+    try {
+      t.deepEqual(
+        await client[prop].missingMethod(),
+        myApi[prop],
+        'property returns promise that resolves to property value'
+      )
+      t.fail('Should not get here')
+    } catch (error) {
+      t.true(error instanceof Error, 'Threw with error')
+    }
+  }
+})
+
+test.skip('Can call call built-in methods on properties', async (t) => {
+  const { client } = setup(myApi)
+  const transferrableProps = [
+    'prop',
+    'objectProp',
+    'arrayProp',
+    'booleanProp',
+    'nullProp',
+    'undefinedProp',
+    'numberProp',
+  ]
+  t.plan(transferrableProps.length)
+  for (const prop of transferrableProps) {
+    try {
+      t.deepEqual(
+        await client[prop].missingMethod(),
+        myApi[prop],
+        'property returns promise that resolves to property value'
+      )
+      t.fail('Should not get here')
+    } catch (error) {
+      t.true(error instanceof Error, 'Threw with error')
+    }
+  }
+})
+
+test('Nested properties can be accessed as async functions', async (t) => {
+  const { client } = setup(myApi)
+  t.equal(await client.namespace.prop(), 'bar', 'nested property works')
+  t.end()
+})
+
+test('Attempting to access a symbol property throws an error', async (t) => {
+  const { client } = setup(myApi)
+  t.plan(2)
+  try {
+    await client.symbolProp()
+    t.fail('Should not get here')
+  } catch (error) {
+    t.true(error instanceof Error, 'Threw with error')
+    t.equal(
+      error.message,
+      "Property 'symbolProp' is a Symbol",
+      'Error message as expected'
+    )
+  }
 })
 
 test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', async (t) => {
