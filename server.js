@@ -1,11 +1,12 @@
 const assert = require('assert')
 const { serializeError } = require('serialize-error')
-const isStream = require('is-stream')
 
+const isStream = require('is-stream')
 const { msgType } = require('./lib/constants')
 const isValidMessage = require('./lib/validate-message')
 const { parse, stringify } = require('./lib/prop-array-utils')
 const MessageStream = require('./lib/message-stream')
+const isMessagePortLike = require('./lib/is-message-port-like')
 const { EventEmitter } = require('events')
 
 /** @typedef {import('./lib/types').MsgRequest} MsgRequest */
@@ -15,6 +16,8 @@ const { EventEmitter } = require('events')
 /** @typedef {import('./lib/types').MsgEmit} MsgEmit */
 /** @typedef {import('./lib/types').Message} Message */
 /** @typedef {import('./lib/types').NonEmptyArray<string>} NonEmptyStringArray */
+/** @typedef {import('./lib/types').MessagePortLike} MessagePortLike */
+/** @typedef {import('worker_threads').MessagePort} MessagePortNode */
 
 module.exports = createServer
 
@@ -27,25 +30,39 @@ module.exports = createServer
  * object will be called on this object. Methods can return a value, a Promise,
  * or a ReadableStream. Your transport stream must be able to encode/decode any
  * values that your handler returns
- * @param {import('stream').Duplex} duplex Duplex Stream with objectMode=true
+ * @param {MessagePort | MessagePortLike | MessagePortNode | import('stream').Duplex} channel A Duplex Stream with objectMode=true or a MessagePort-like object that must implement an `.on('message')` event handler and a `.postMessage()` method.
  *
  * @returns {{ close: () => void }} An object with a single method `close()`
  * that will stop the server listening to and sending any more messages
  */
-function createServer(handler, duplex) {
+function createServer(handler, channel) {
   assert(typeof handler === 'object', 'Missing handler object.')
-  assert(isStream.duplex(duplex), 'Must pass a duplex stream as first argument')
+  const channelIsStream = isStream.duplex(channel)
+  assert(
+    isMessagePortLike(channel) || channelIsStream,
+    'Must pass a Duplex Stream or a browser MessagePort, node worker.MessagePort, or MessagePort-like object'
+  )
 
   /** @type {Map<string, (...args: any[]) => void>} */
   let subscriptions = new Map()
 
-  duplex.on('data', handleMessage)
+  if (channelIsStream) {
+    channel.on('data', handleMessage)
+  } else if ('on' in channel) {
+    channel.on('message', handleMessage)
+  } else {
+    channel.addEventListener('message', handleMessageEvent)
+  }
 
   /** @param {MsgResponse | MsgEmit} msg */
   function send(msg) {
     // TODO: Do we need back pressure here? Would just result in buffering here
     // vs. buffering in the stream, so probably no
-    duplex.write(msg)
+    if (channelIsStream) {
+      channel.write(msg)
+    } else {
+      channel.postMessage(msg)
+    }
   }
 
   /**
@@ -65,6 +82,15 @@ function createServer(handler, duplex) {
       default:
         console.warn(`Unhandled message type: ${msg[0]}. (Message was ignored)`)
     }
+  }
+
+  /**
+   * In the browser a MessagePort 'message' event calls the listener with a
+   * `MessageEvent` with the value/data on `event.data`
+   * @param {MessageEvent} event
+   */
+  function handleMessageEvent(event) {
+    handleMessage(event.data)
   }
 
   /** @param {MsgRequest} msg */
@@ -88,10 +114,15 @@ function createServer(handler, duplex) {
 
     /** @param {import('stream').Readable} stream */
     function handleStream(stream) {
-      // It's intentional that we do not bubble errors here. MessageStream
-      // captures any error in `stream` and sends it as a message through the
-      // duplex stream
-      stream.pipe(new MessageStream(msgId)).pipe(duplex, { end: false })
+      const rs = stream.pipe(new MessageStream(msgId))
+      if (channelIsStream) {
+        rs.pipe(channel, { end: false })
+      } else {
+        rs.on('data', (chunk) => send(chunk))
+      }
+      rs.on('error', (err) =>
+        send([msgType.RESPONSE, msgId, serializeError(err)])
+      )
     }
   }
 
@@ -142,7 +173,13 @@ function createServer(handler, duplex) {
 
   return {
     close: () => {
-      duplex.removeListener('data', handleMessage)
+      if (channelIsStream) {
+        channel.off('data', handleMessage)
+      } else if ('off' in channel) {
+        channel.off('message', handleMessage)
+      } else {
+        channel.removeEventListener('message', handleMessageEvent)
+      }
       for (const [encodedEventName, listener] of subscriptions.entries()) {
         const [propArray, eventName] = parse(encodedEventName)
         try {

@@ -4,7 +4,7 @@
   "description": "Call methods on an object over RPC",
   "main": "index.js",
   "scripts": {
-    "test": "tap --no-check-coverage",
+    "test": "tap --no-check-coverage test/**/*.test.js",
     "coverage": "mkdir -p coverage && tap --no-check-coverage --coverage-report=text-lcov > ./coverage/lcov.info",
     "type": "tsc",
     "format": "prettier --write ."

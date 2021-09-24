@@ -68,3 +68,9 @@ interface AnyMethod {
 }
 
 export type Client = AnyMethod & EventEmitter
+
+export interface MessagePortLike {
+  on(event: 'message', listener: (value: any) => void): this
+  off(event: 'message', listener: (value: any) => void): this
+  postMessage(value: any): void
+}

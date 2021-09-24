@@ -5,6 +5,7 @@ const promiseTimeout = require('p-timeout')
 const util = require('util')
 const isStream = require('is-stream')
 
+const isMessagePortLike = require('./lib/is-message-port-like')
 const { msgType } = require('./lib/constants')
 const { stringify, parse } = require('./lib/prop-array-utils')
 const isValidMessage = require('./lib/validate-message')
@@ -17,6 +18,8 @@ const isValidMessage = require('./lib/validate-message')
 /** @typedef {import('./lib/types').Message} Message */
 /** @typedef {import('./lib/types').Client} Client */
 /** @typedef {import('./lib/types').SubClient} SubClient */
+/** @typedef {import('./lib/types').MessagePortLike} MessagePortLike */
+/** @typedef {import('worker_threads').MessagePort} MessagePortNode */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -35,13 +38,17 @@ module.exports = createClient
  * Create an RPC client that will relay any method that is called via `send`. It
  * listens to replies from the server via `receiver`.
  *
- * @param {import('stream').Duplex} stream Duplex Stream with objectMode=true
+ * @param {MessagePort | MessagePortLike | MessagePortNode | import('stream').Duplex} channel A Duplex Stream with objectMode=true or a MessagePort-like object that must implement an `.on('message')` event handler and a `.postMessage()` method.
  * @param {{timeout?: number}} options Optionally set timeout (default 5000)
  *
  * @returns {Client}
  */
-function createClient(stream, { timeout = 5000 } = {}) {
-  assert(isStream.duplex(stream), 'Must pass a duplex stream as first argument')
+function createClient(channel, { timeout = 5000 } = {}) {
+  const channelIsStream = isStream.duplex(channel)
+  assert(
+    isMessagePortLike(channel) || channelIsStream,
+    'Must pass a Duplex Stream or a browser MessagePort, node worker.MessagePort, or MessagePort-like object'
+  )
   let id = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
   const pending = new Map() // Messages pending response
@@ -49,13 +56,23 @@ function createClient(stream, { timeout = 5000 } = {}) {
   const collector = new Map() // Streaming responses pending return
   const emitter = new EventEmitter()
 
-  stream.on('data', handleMessage)
+  if (channelIsStream) {
+    channel.on('data', handleMessage)
+  } else if ('on' in channel) {
+    channel.on('message', handleMessage)
+  } else {
+    channel.addEventListener('message', handleMessageEvent)
+  }
 
   /** @param {MsgRequest | MsgOn | MsgOff} msg */
   function send(msg) {
     // TODO: Do we need back pressure here? Would just result in buffering here
     // vs. buffering in the stream, so probably no
-    stream.write(msg)
+    if (channelIsStream) {
+      channel.write(msg)
+    } else {
+      channel.postMessage(msg)
+    }
   }
 
   /**
@@ -75,6 +92,15 @@ function createClient(stream, { timeout = 5000 } = {}) {
           `Received unexpected message type: ${msg[0]}. (Message was ignored)`
         )
     }
+  }
+
+  /**
+   * In the browser a MessagePort 'message' event calls the listener with a
+   * `MessageEvent` with the value/data on `event.data`
+   * @param {MessageEvent} event
+   */
+  function handleMessageEvent(event) {
+    handleMessage(event.data)
   }
 
   /** @param {MsgResponse} msg */
@@ -140,7 +166,13 @@ function createClient(stream, { timeout = 5000 } = {}) {
   }
 
   function handleClose() {
-    stream.off('data', handleMessage)
+    if (channelIsStream) {
+      channel.off('data', handleMessage)
+    } else if ('off' in channel) {
+      channel.off('message', handleMessage)
+    } else {
+      channel.removeEventListener('message', handleMessageEvent)
+    }
     // TODO: Should we do this? Or leave it to the user? It's considered "bad
     // practice" to do this
     emitter.removeAllListeners()
