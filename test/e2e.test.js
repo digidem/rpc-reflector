@@ -205,7 +205,7 @@ function runTests(setup) {
     }
   })
 
-  test('Calling non-existant methods rejects with error', async (t) => {
+  test('Calling non-existent methods rejects with error', async (t) => {
     const { client } = setup(myApi)
 
     try {
