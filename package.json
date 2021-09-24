@@ -1,6 +1,6 @@
 {
   "name": "rpc-reflector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Call methods on an object over RPC",
   "main": "index.js",
   "scripts": {
