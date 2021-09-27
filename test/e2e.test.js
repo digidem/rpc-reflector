@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 const test = require('tape-async')
 const { createClient, createServer } = require('..')
 const { EventEmitter } = require('events')
@@ -9,6 +9,11 @@ const ReadableError = require('readable-error')
 const DuplexPair = require('native-duplexpair')
 const { MessagePortPair } = require('./helpers')
 
+/**
+ * @template ApiType
+ * @typedef {import('../lib/types').ClientApi<ApiType>} ClientApi
+ */
+
 const fixturePath = path.join(__dirname, 'fixtures/lorem.txt')
 const fixtureBuf = fs.readFileSync(fixturePath)
 const objectsFixture = fixtureBuf
@@ -17,6 +22,10 @@ const objectsFixture = fixtureBuf
   .map((text) => ({ text }))
 
 const myApi = {
+  /**
+   * @param {number} a
+   * @param {number} b
+   */
   add(a, b) {
     return a + b
   },
@@ -31,6 +40,10 @@ const myApi = {
   undefinedProp: undefined,
   numberProp: 42,
   namespace: {
+    /**
+     * @param {number} a
+     * @param {number} b
+     */
     sub(a, b) {
       return a - b
     },
@@ -38,6 +51,10 @@ const myApi = {
   },
   deep: {
     nested: {
+      /**
+       * @param {number} a
+       * @param {number} b
+       */
       mult(a, b) {
         return a * b
       },
@@ -69,6 +86,7 @@ const myApi = {
     // (each chunk is sent as a separate message)
     return fs.createReadStream(fixturePath, { highWaterMark: 10 })
   },
+  /** @param {object} o */
   createObjectStream(o) {
     return intoStream.object(o)
   },
@@ -96,11 +114,16 @@ runTests(function setup(api, opts) {
   return {
     client: createClient(clientStream, opts),
     server: createServer(api, serverStream),
-    clientStream,
-    serverStream,
   }
 })
 
+/**
+ * @typedef {<T extends object>(api: T, opts?: Parameters<typeof createClient>[1]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
+ */
+
+/**
+ * @param {SetupFunction} setup
+ */
 function runTests(setup) {
   test('Client is instance of EventEmitter', (t) => {
     const { client } = setup(myApi)
@@ -119,7 +142,10 @@ function runTests(setup) {
       'Readable stream as string works'
     )
     t.ok(
-      fixtureBuf.equals(await client.createBufferStream()),
+      fixtureBuf.equals(
+        // I have not found an easy way to automatically type the return type of streams
+        /** @type {Uint8Array} */ (await client.createBufferStream())
+      ),
       'Readable buffer works'
     )
     t.deepEqual(
@@ -133,7 +159,10 @@ function runTests(setup) {
       arrayOfStrings,
       'An object stream returns as an array of chunks, not as a concatenated string'
     )
-    const arrayOfBuffers = objectsFixture.toString().split(' ').map(Buffer.from)
+    const arrayOfBuffers = objectsFixture
+      .toString()
+      .split(' ')
+      .map((s) => Buffer.from(s))
     t.deepEqual(
       await client.createObjectStream(arrayOfBuffers),
       arrayOfBuffers,
@@ -163,6 +192,7 @@ function runTests(setup) {
     t.equal(await client.namespace.sub(5, 2), 3, 'nested method works')
     t.equal(await client.deep.nested.mult(2, 3), 6, 'deep nested works')
     try {
+      // @ts-expect-error
       await client.namespace.missingMethod('donkey?')
       t.fail('Should not get here')
     } catch (error) {
@@ -174,6 +204,7 @@ function runTests(setup) {
       )
     }
     try {
+      // @ts-expect-error
       await client.deep.missingNameSpace.sub('donkey?')
       t.fail('Should not get here')
     } catch (error) {
@@ -188,6 +219,7 @@ function runTests(setup) {
       let horse
       // Need to await this separately, because otherwise the rejection is not caught
       try {
+        // @ts-expect-error
         horse = await client.deep.missingNameSpace('horse')
       } catch (e) {}
       await horse.sub('donkey?')
@@ -197,6 +229,7 @@ function runTests(setup) {
       t.ok(error.message.match('undefined'), 'Error message as expected')
     }
     try {
+      // @ts-expect-error
       await client.prop.oops('donkey?')
       t.fail('Should not get here')
     } catch (error) {
@@ -209,6 +242,7 @@ function runTests(setup) {
     const { client } = setup(myApi)
 
     try {
+      // @ts-expect-error
       await client.missingMethod('donkey?')
       t.fail('Should not get here')
     } catch (error) {
@@ -234,17 +268,26 @@ function runTests(setup) {
     t.end()
   })
 
+  /** @type {['prop',
+    'objectProp',
+    'arrayProp',
+    'booleanProp',
+    'nullProp',
+    'undefinedProp',
+    'numberProp'
+  ]} */
+  const transferrableProps = [
+    'prop',
+    'objectProp',
+    'arrayProp',
+    'booleanProp',
+    'nullProp',
+    'undefinedProp',
+    'numberProp',
+  ]
+
   test('Properties can be accessed as async functions', async (t) => {
     const { client } = setup(myApi)
-    const transferrableProps = [
-      'prop',
-      'objectProp',
-      'arrayProp',
-      'booleanProp',
-      'nullProp',
-      'undefinedProp',
-      'numberProp',
-    ]
     t.plan(transferrableProps.length)
     for (const prop of transferrableProps) {
       t.deepEqual(
@@ -257,45 +300,11 @@ function runTests(setup) {
 
   test('Cannot call non-existent methods on properties', async (t) => {
     const { client } = setup(myApi)
-    const transferrableProps = [
-      'prop',
-      'objectProp',
-      'arrayProp',
-      'booleanProp',
-      'nullProp',
-      'undefinedProp',
-      'numberProp',
-    ]
     t.plan(transferrableProps.length)
     for (const prop of transferrableProps) {
       try {
         t.deepEqual(
-          await client[prop].missingMethod(),
-          myApi[prop],
-          'property returns promise that resolves to property value'
-        )
-        t.fail('Should not get here')
-      } catch (error) {
-        t.true(error instanceof Error, 'Threw with error')
-      }
-    }
-  })
-
-  test.skip('Can call call built-in methods on properties', async (t) => {
-    const { client } = setup(myApi)
-    const transferrableProps = [
-      'prop',
-      'objectProp',
-      'arrayProp',
-      'booleanProp',
-      'nullProp',
-      'undefinedProp',
-      'numberProp',
-    ]
-    t.plan(transferrableProps.length)
-    for (const prop of transferrableProps) {
-      try {
-        t.deepEqual(
+          // @ts-expect-error
           await client[prop].missingMethod(),
           myApi[prop],
           'property returns promise that resolves to property value'
@@ -317,6 +326,7 @@ function runTests(setup) {
     const { client } = setup(myApi)
     t.plan(2)
     try {
+      // @ts-expect-error
       await client.symbolProp()
       t.fail('Should not get here')
     } catch (error) {
@@ -330,10 +340,14 @@ function runTests(setup) {
   })
 
   test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', async (t) => {
-    const { client, clientStream } = setup({})
+    const { client } = setup({})
+    // @ts-expect-error
     client.on('myEvent', t.fail)
+    // @ts-expect-error
     client.off('myEvent', t.fail)
+    // @ts-expect-error
     client.namespace.on('myEvent', t.fail)
+    // @ts-expect-error
     client.namespace.off('myEvent', t.fail)
     setTimeout(t.end, 200)
   })
@@ -521,6 +535,7 @@ function runTests(setup) {
 
   test('Non-string methods / props are not supported', (t) => {
     const { client } = setup(myApi)
+    // @ts-expect-error
     t.throws(() => client[Symbol('test')](), 'Calling a symbol method throws')
     t.end()
   })
@@ -530,7 +545,7 @@ function runTests(setup) {
     // This was throwing without a trap for util.inspect.custom
     t.doesNotThrow(() => console.log(client))
     t.doesNotThrow(() => console.log(client.add))
-    t.doesNotThrow(() => console.log(client.add()))
+    t.doesNotThrow(() => console.log(client.add(1, 2)))
     t.end()
   })
 }

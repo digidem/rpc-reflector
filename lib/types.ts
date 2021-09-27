@@ -1,5 +1,7 @@
 import { ErrorObject } from 'serialize-error'
 import { EventEmitter } from 'events'
+import { Readable } from 'stream'
+import { Primitive } from 'type-fest'
 
 export enum msgType {
   REQUEST = 0,
@@ -73,4 +75,34 @@ export interface MessagePortLike {
   on(event: 'message', listener: (value: any) => void): this
   off(event: 'message', listener: (value: any) => void): this
   postMessage(value: any): void
+}
+
+// Turn a sync function into an async function, or stream to return the collated stream
+type Asyncify<T extends (...args: any[]) => any> =
+  ReturnType<T> extends Promise<infer Value>
+    ? T
+    : ReturnType<T> extends Readable
+    ? // TODO: Is there a way to type streams that we can use here?
+      (...args: Parameters<T>) => Promise<string | Buffer | Uint8Array | any[]>
+    : (...args: Parameters<T>) => Promise<ReturnType<T>>
+
+type Filter<KeyType, ExcludeType> = KeyType extends ExcludeType
+  ? never
+  : KeyType
+
+export type ClientApi<ServerApi extends {}> = {
+  [KeyType in keyof ServerApi as Filter<
+    KeyType,
+    Symbol
+  >]: KeyType extends keyof EventEmitter
+    ? ServerApi[KeyType]
+    : ServerApi[KeyType] extends (...args: any[]) => any
+    ? Asyncify<ServerApi[KeyType]>
+    : ServerApi[KeyType] extends Array<infer T>
+    ? () => Promise<T[]>
+    : ServerApi[KeyType] extends { [key: string]: any }
+    ? ClientApi<ServerApi[KeyType]> & (() => Promise<ServerApi[KeyType]>)
+    : ServerApi[KeyType] extends Symbol
+    ? never
+    : () => Promise<ServerApi[KeyType]>
 }

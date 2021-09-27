@@ -18,6 +18,10 @@ const isValidMessage = require('./lib/validate-message')
 /** @typedef {import('./lib/types').Message} Message */
 /** @typedef {import('./lib/types').Client} Client */
 /** @typedef {import('./lib/types').SubClient} SubClient */
+/**
+ * @template ApiType
+ * @typedef {import('./lib/types').ClientApi<ApiType>} ClientApi
+ */
 /** @typedef {import('./lib/types').MessagePortLike} MessagePortLike */
 /** @typedef {import('worker_threads').MessagePort} MessagePortNode */
 
@@ -35,13 +39,14 @@ module.exports = createClient
 
 /**
  * @public
+ * @template ApiType
  * Create an RPC client that will relay any method that is called via `send`. It
  * listens to replies from the server via `receiver`.
  *
  * @param {MessagePort | MessagePortLike | MessagePortNode | import('stream').Duplex} channel A Duplex Stream with objectMode=true or a MessagePort-like object that must implement an `.on('message')` event handler and a `.postMessage()` method.
  * @param {{timeout?: number}} options Optionally set timeout (default 5000)
  *
- * @returns {Client}
+ * @returns {ClientApi<ApiType>}
  */
 function createClient(channel, { timeout = 5000 } = {}) {
   const channelIsStream = isStream.duplex(channel)
@@ -183,7 +188,7 @@ function createClient(channel, { timeout = 5000 } = {}) {
   /**
    * @param {string[]} propArray
    * @param {Function | {}} target
-   * @returns {Client  | SubClient} */
+   * @returns {ClientApi<ApiType>} */
   function createSubClient(propArray, target) {
     /** @type {ProxyHandler<any>} */
     const handler = {
@@ -272,7 +277,6 @@ function createClient(channel, { timeout = 5000 } = {}) {
       },
     }
 
-    /** @type {Client | SubClient} */
     const proxy = new Proxy(target, handler)
 
     return proxy

@@ -20,12 +20,15 @@ test('Method ignores response on different messageId', (t) => {
   client
     .myMethod()
     .then(t.fail)
-    .catch((err) => {
-      t.ok(
-        /timed out/.test(err.message),
-        'Request times out (messages ignored)'
-      )
-    })
+    .catch(
+      /** @param {Error} err */
+      (err) => {
+        t.ok(
+          /timed out/.test(err.message),
+          'Request times out (messages ignored)'
+        )
+      }
+    )
 })
 
 test('Ignores invalid messages', (t) => {
@@ -57,10 +60,13 @@ test('Ignores invalid messages', (t) => {
   client
     .myMethod()
     .then(t.fail)
-    .catch((err) => {
-      t.ok(
-        /timed out/.test(err.message),
-        'Request times out (messages ignored)'
-      )
-    })
+    .catch(
+      /** @param {Error} err */
+      (err) => {
+        t.ok(
+          /timed out/.test(err.message),
+          'Request times out (messages ignored)'
+        )
+      }
+    )
 })

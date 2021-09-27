@@ -32,9 +32,9 @@ npm install rpc-reflector
 
 ## Usage
 
-```js
-const { createClient, createServer } = require('rpc-reflector')
-const DuplexPair = require('native-duplexpair')
+```ts
+import { createClient, createServer } from 'rpc-reflector'
+import DuplexPair from 'native-duplexpair'
 
 const myApi = {
   syncMethod: () => 'result1',
@@ -51,7 +51,7 @@ const serverStream = socket1
 const clientStream = socket2
 
 const { close } = createServer(myApi, serverStream)
-const myApiOnClient = createClient(clientStream)(async () => {
+const myApiOnClient = createClient<typeof myApi>(clientStream)(async () => {
   const result1 = await myApiOnClient.syncMethod()
   const result2 = await myApiOnClient.asyncMethod()
   console.log(result1) // 'result1'
@@ -76,6 +76,14 @@ If `channel` is a MessagePort you will need to manually call [`port.start()`](ht
 `channel`: see above for `createServer()`
 
 Returns `clientApi` which can be called with any method on the `api` passed to `createServer()`. Events on `api` can be subscribed to via `clientApi.on(eventName, handler)` on the client. Properties/fields on the server `api` can be access by calling a method with the same name on the client API, e.g. to access the property `api.myProp`, on the client call `await clientApi.myProp()`.
+
+When using Typescript, you can pass the type of the server API as a generic e.g.
+
+```ts
+const clientApi = createClient<ServerApi>(channel)
+```
+
+The returned `clientApi` will be correctly typed, with synchronous functions converted to synchronous.
 
 ### `createClient.close(clientApi)`
 
