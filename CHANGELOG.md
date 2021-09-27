@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.1.0...v1.2.0) (2021-09-27)
+
+### Features
+
+- Strictly-typed client API from the server API type ([7f8117b](https://github.com/gmaclennan/rpc-reflector/commit/7f8117bfc58a762b184b8e273547e9be74d5c950))
+
 ## 1.1.0 (2021-09-24)
 
 ### Features
