@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.3.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.2.0...v1.3.0) (2021-09-29)
+
+### Features
+
+- Publish Typescript typings to npm ([e73c87e](https://github.com/gmaclennan/rpc-reflector/commit/e73c87ef33b44d490ee33b8656f67240556cdb63))
+
 ## [1.2.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.1.0...v1.2.0) (2021-09-27)
 
 ### Features
