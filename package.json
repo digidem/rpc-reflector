@@ -50,5 +50,14 @@
     "tape-async": "^2.3.0",
     "type-fest": "^2.3.4",
     "typescript": "^4.4.3"
-  }
+  },
+  "files": [
+    "server.js",
+    "encode-decode.js",
+    "client.js",
+    "CHANGELOG.md",
+    "lib/",
+    "examples/",
+    "dist/"
+  ]
 }
