@@ -9,7 +9,8 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": true,
-    "noEmit": true,
+    "declaration": true,
+    "outDir": "./dist",
     "typeRoots": ["types", "node_modules/@types"]
   }
 }

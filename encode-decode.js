@@ -42,7 +42,7 @@ const defaultEncoding = {
  * @returns {import('stream').Duplex} Duplex stream in objectMode which can
  * write/read from and rpc client / server
  */
-module.exports = function createEncodeDecodeStream(duplex, options = {}) {
+function createEncodeDecodeStream(duplex, options = {}) {
   const { encode, decode } = options.encoding || defaultEncoding
 
   const encodeStream = through.obj((chunk, enc, cb) => cb(null, encode(chunk)))
@@ -65,3 +65,5 @@ module.exports = function createEncodeDecodeStream(duplex, options = {}) {
 
   return unEncodedStream
 }
+
+module.exports = createEncodeDecodeStream
