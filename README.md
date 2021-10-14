@@ -51,7 +51,9 @@ const serverStream = socket1
 const clientStream = socket2
 
 const { close } = createServer(myApi, serverStream)
-const myApiOnClient = createClient<typeof myApi>(clientStream)(async () => {
+const myApiOnClient = createClient<typeof myApi>(clientStream)
+
+;(async () => {
   const result1 = await myApiOnClient.syncMethod()
   const result2 = await myApiOnClient.asyncMethod()
   console.log(result1) // 'result1'
