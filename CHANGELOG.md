@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.2](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.1...v1.3.2) (2023-03-24)
+
+### Bug Fixes
+
+- specify missing pump dep ([#13](https://github.com/gmaclennan/rpc-reflector/issues/13)) ([b2ba95a](https://github.com/gmaclennan/rpc-reflector/commit/b2ba95a1281d668b7fba54c37f96af7caa4e283c))
+
 ### [1.3.1](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.0...v1.3.1) (2021-09-29)
 
 ### Bug Fixes
