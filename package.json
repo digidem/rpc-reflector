@@ -60,5 +60,18 @@
     "lib/",
     "examples/",
     "dist/"
-  ]
+  ],
+  "directories": {
+    "example": "examples",
+    "lib": "lib",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gmaclennan/rpc-reflector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gmaclennan/rpc-reflector/issues"
+  },
+  "homepage": "https://github.com/gmaclennan/rpc-reflector#readme"
 }
