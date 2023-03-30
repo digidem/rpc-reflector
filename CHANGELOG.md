@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.3](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.2...v1.3.3) (2023-03-30)
+
+### Bug Fixes
+
+- Add git url to package.json ([e08e4a3](https://github.com/gmaclennan/rpc-reflector/commit/e08e4a3a38684a79cbab132eb4530147f3ec9c41))
+
 ### [1.3.2](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.1...v1.3.2) (2023-03-24)
 
 ### Bug Fixes
