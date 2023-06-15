@@ -51,7 +51,7 @@ function createServer(handler, channel) {
   } else if ('on' in channel) {
     channel.on('message', handleMessage)
   } else {
-    channel.addEventListener('message', handleMessageEvent)
+    channel.addEventListener('message', handleMessage)
   }
 
   /** @param {MsgResponse | MsgEmit} msg */
@@ -67,10 +67,15 @@ function createServer(handler, channel) {
 
   /**
    * Handles an incoming message.
-   * @param {any} msg Can be any type, but we only process messages types that
+   * @param {unknown} msg Can be any type, but we only process messages types that
    * we understand, other messages are ignored
    */
   function handleMessage(msg) {
+    // When using a MessagePort in a browser or electron environment, the
+    // actual data is in `event.data`
+    if (typeof msg === 'object' && msg && 'data' in msg) {
+      msg = msg.data
+    }
     if (!isValidMessage(msg)) return
     switch (msg[0]) {
       case msgType.REQUEST:
@@ -82,15 +87,6 @@ function createServer(handler, channel) {
       default:
         console.warn(`Unhandled message type: ${msg[0]}. (Message was ignored)`)
     }
-  }
-
-  /**
-   * In the browser a MessagePort 'message' event calls the listener with a
-   * `MessageEvent` with the value/data on `event.data`
-   * @param {MessageEvent} event
-   */
-  function handleMessageEvent(event) {
-    handleMessage(event.data)
   }
 
   /** @param {MsgRequest} msg */
@@ -178,7 +174,7 @@ function createServer(handler, channel) {
       } else if ('off' in channel) {
         channel.off('message', handleMessage)
       } else {
-        channel.removeEventListener('message', handleMessageEvent)
+        channel.removeEventListener('message', handleMessage)
       }
       for (const [encodedEventName, listener] of subscriptions.entries()) {
         const [propArray, eventName] = parse(encodedEventName)
