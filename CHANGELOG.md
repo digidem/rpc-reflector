@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.4](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.3...v1.3.4) (2023-06-15)
+
+### Bug Fixes
+
+- handle MessagePorts in electron environments ([5e0ee51](https://github.com/gmaclennan/rpc-reflector/commit/5e0ee51ed5d58d3660ea4dc5da81f96ec50a3e9b))
+
 ### [1.3.3](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.2...v1.3.3) (2023-03-30)
 
 ### Bug Fixes
