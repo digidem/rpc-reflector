@@ -1,6 +1,6 @@
 // @ts-nocheck
 const test = require('tape-async')
-const { PassThrough } = require('stream')
+const { PassThrough } = require('readable-stream')
 const duplexify = require('duplexify')
 
 const { createServer } = require('..')
