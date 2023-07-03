@@ -19,7 +19,7 @@ const isValidMessage = require('./lib/validate-message')
 /** @typedef {import('./lib/types').Client} Client */
 /** @typedef {import('./lib/types').SubClient} SubClient */
 /**
- * @template {object} ApiType
+ * @template {{}} ApiType
  * @typedef {import('./lib/types').ClientApi<ApiType>} ClientApi
  */
 /** @typedef {import('./lib/types').MessagePortLike} MessagePortLike */
@@ -39,7 +39,7 @@ module.exports = createClient
 
 /**
  * @public
- * @template ApiType
+ * @template {{}} ApiType
  * Create an RPC client that will relay any method that is called via `send`. It
  * listens to replies from the server via `receiver`.
  *

@@ -1,5 +1,5 @@
 const test = require('tape-async')
-const { PassThrough } = require('stream')
+const { PassThrough } = require('readable-stream')
 const duplexify = require('duplexify')
 
 const { createClient } = require('..')
@@ -14,10 +14,11 @@ test('Method ignores response on different messageId', (t) => {
   const expectedResult = {}
 
   writeable.on('data', (msg) => {
-    readable.write([msgType.RESPONSE, Math.random(), null, expectedResult])
+    readable.write([msgType.RESPONSE, 9999, null, expectedResult])
   })
   const client = createClient(stream, { timeout: 200 })
   client
+    // @ts-expect-error
     .myMethod()
     .then(t.fail)
     .catch(
@@ -58,6 +59,7 @@ test('Ignores invalid messages', (t) => {
 
   const client = createClient(stream, { timeout: 200 })
   client
+    // @ts-expect-error
     .myMethod()
     .then(t.fail)
     .catch(

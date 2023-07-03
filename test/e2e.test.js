@@ -10,7 +10,7 @@ const DuplexPair = require('native-duplexpair')
 const { MessagePortPair } = require('./helpers')
 
 /**
- * @template ApiType
+ * @template {{}} ApiType
  * @typedef {import('../lib/types').ClientApi<ApiType>} ClientApi
  */
 
@@ -93,6 +93,7 @@ const myApi = {
 }
 
 // Run tests with MessagePort
+// @ts-ignore
 runTests(function setup(api, opts) {
   const { port1: serverMPort, port2: clientMPort } = new MessagePortPair()
 
@@ -105,6 +106,7 @@ runTests(function setup(api, opts) {
 })
 
 // Run tests with Duplex Stream
+// @ts-ignore
 runTests(function setup(api, opts) {
   const { socket1, socket2 } = new DuplexPair({ objectMode: true })
 
@@ -118,7 +120,7 @@ runTests(function setup(api, opts) {
 })
 
 /**
- * @typedef {<T extends object>(api: T, opts?: Parameters<typeof createClient>[1]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
+ * @typedef {<T extends {}>(api: T, opts?: Parameters<typeof createClient>[1]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
  */
 
 /**
