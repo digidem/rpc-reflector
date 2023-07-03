@@ -14,7 +14,7 @@ test('Method ignores response on different messageId', (t) => {
   const expectedResult = {}
 
   writeable.on('data', (msg) => {
-    readable.write([msgType.RESPONSE, msg[1], null, expectedResult])
+    readable.write([msgType.RESPONSE, 9999, null, expectedResult])
   })
   const client = createClient(stream, { timeout: 200 })
   client
