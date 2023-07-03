@@ -14,10 +14,11 @@ test('Method ignores response on different messageId', (t) => {
   const expectedResult = {}
 
   writeable.on('data', (msg) => {
-    readable.write([msgType.RESPONSE, Math.random(), null, expectedResult])
+    readable.write([msgType.RESPONSE, msg[1], null, expectedResult])
   })
   const client = createClient(stream, { timeout: 200 })
   client
+    // @ts-expect-error
     .myMethod()
     .then(t.fail)
     .catch(
@@ -58,6 +59,7 @@ test('Ignores invalid messages', (t) => {
 
   const client = createClient(stream, { timeout: 200 })
   client
+    // @ts-expect-error
     .myMethod()
     .then(t.fail)
     .catch(

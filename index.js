@@ -1,5 +1,8 @@
-module.exports = {
-  createClient: require('./client'),
-  createServer: require('./server'),
-  createEncodeDecodeStream: require('./encode-decode'),
-}
+/**
+ * @template {{}} ApiType
+ * @typedef {import('./lib/types').ClientApi<ApiType>} ClientApi
+ */
+
+module.exports.createClient = require('./client')
+module.exports.createServer = require('./server')
+module.exports.createEncodeDecodeStream = require('./encode-decode')

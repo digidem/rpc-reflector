@@ -17,7 +17,10 @@ const serverStream = socket1
 const clientStream = socket2
 
 const { close } = createServer(myApi, serverStream)
-const myApiOnClient = createClient(clientStream)
+
+const myApiOnClient = /** @type {import('..').ClientApi<typeof myApi>} */ (
+  createClient(clientStream)
+)
 
 ;(async () => {
   const result1 = await myApiOnClient.syncMethod()
