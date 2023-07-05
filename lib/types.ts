@@ -1,7 +1,6 @@
 import { ErrorObject } from 'serialize-error'
 import { EventEmitter } from 'events'
 import { Readable } from 'stream'
-import { Primitive } from 'type-fest'
 
 export enum msgType {
   REQUEST = 0,

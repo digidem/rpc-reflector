@@ -7,9 +7,9 @@
   "scripts": {
     "test": "tap --no-check-coverage test/**/*.test.js",
     "coverage": "mkdir -p coverage && tap --no-check-coverage --coverage-report=text-lcov > ./coverage/lcov.info",
-    "type": "tsc --noEmit",
+    "type": "tsc",
     "format": "prettier --write .",
-    "prepack": "tsc --outDir dist --allowJs --emitDeclarationOnly --declaration index.js"
+    "prepack": "npm run type"
   },
   "husky": {
     "hooks": {

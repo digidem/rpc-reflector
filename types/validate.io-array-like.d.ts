@@ -2,6 +2,6 @@
 // Project: https://github.com/validate-io/array-like
 
 declare module 'validate.io-array-like' {
-  function isArrayLike(any: any): boolean
+  function isArrayLike(maybeArrayLike: any): maybeArrayLike is ArrayLike<any>
   export = isArrayLike
 }
