@@ -20,6 +20,7 @@
   "license": "ISC",
   "dependencies": {
     "@msgpack/msgpack": "^1.12.1",
+    "@types/node": "^18.16.19",
     "assert": "^2.0.0",
     "duplexify": "^4.1.2",
     "is-stream": "^2.0.1",
@@ -33,7 +34,6 @@
   "devDependencies": {
     "@types/concat-stream": "^1.6.1",
     "@types/duplexify": "^3.6.0",
-    "@types/node": "^18.16.19",
     "@types/once": "^1.4.0",
     "@types/pump": "^1.1.1",
     "@types/readable-stream": "^2.3.15",
