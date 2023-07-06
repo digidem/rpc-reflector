@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.7](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.6...v1.3.7) (2023-07-06)
+
+### Bug Fixes
+
+- remove 'assert' module, vendor invariant ([5c82503](https://github.com/gmaclennan/rpc-reflector/commit/5c82503f52bf2af698b9afcf182ad1971a9c1c71))
+
 ### [1.3.6](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.5...v1.3.6) (2023-07-05)
 
 ### Bug Fixes
