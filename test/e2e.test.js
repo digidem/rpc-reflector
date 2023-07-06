@@ -537,7 +537,6 @@ function runTests(setup) {
 
   test('Non-string methods / props are not supported', (t) => {
     const { client } = setup(myApi)
-    // @ts-expect-error
     t.throws(() => client[Symbol('test')](), 'Calling a symbol method throws')
     t.end()
   })
