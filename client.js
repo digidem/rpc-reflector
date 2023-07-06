@@ -1,5 +1,5 @@
 const EventEmitter = require('events').EventEmitter
-const assert = require('assert')
+const { invariant } = require('./lib/invariant')
 const { deserializeError } = require('serialize-error')
 const promiseTimeout = require('p-timeout')
 const util = require('util')
@@ -50,7 +50,7 @@ module.exports = createClient
  */
 function createClient(channel, { timeout = 5000 } = {}) {
   const channelIsStream = isStream.duplex(channel)
-  assert(
+  invariant(
     isMessagePortLike(channel) || channelIsStream,
     'Must pass a Duplex Stream or a browser MessagePort, node worker.MessagePort, or MessagePort-like object'
   )

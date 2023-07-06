@@ -1,4 +1,4 @@
-const assert = require('assert')
+const { invariant } = require('./lib/invariant')
 const { serializeError } = require('serialize-error')
 
 const isStream = require('is-stream')
@@ -36,9 +36,9 @@ module.exports = createServer
  * that will stop the server listening to and sending any more messages
  */
 function createServer(handler, channel) {
-  assert(typeof handler === 'object', 'Missing handler object.')
+  invariant(typeof handler === 'object', 'Missing handler object.')
   const channelIsStream = isStream.duplex(channel)
-  assert(
+  invariant(
     isMessagePortLike(channel) || channelIsStream,
     'Must pass a Duplex Stream or a browser MessagePort, node worker.MessagePort, or MessagePort-like object'
   )
