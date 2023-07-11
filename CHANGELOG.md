@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.9-rc.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.8...v1.3.9-rc.0) (2023-07-11)
+
+### Bug Fixes
+
+- remove dep on 'util' ([d6019a5](https://github.com/gmaclennan/rpc-reflector/commit/d6019a562d9776ae45bda7a3e891e936983f6a61))
+- Use eventemitter3 on the client ([0280758](https://github.com/gmaclennan/rpc-reflector/commit/0280758b078542f59bfa9ffe2e0dccc6323f440b))
+- Work without 'process' ([45de977](https://github.com/gmaclennan/rpc-reflector/commit/45de977a05abe8b1cd05feeb389d047f2496bd3b))
+
 ### [1.3.8](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.7...v1.3.8) (2023-07-06)
 
 ### Bug Fixes
