@@ -57,10 +57,10 @@
     "server.js",
     "encode-decode.js",
     "client.js",
+    "*.d.ts",
     "CHANGELOG.md",
     "lib/",
-    "examples/",
-    "dist/"
+    "examples/"
   ],
   "directories": {
     "example": "examples",
