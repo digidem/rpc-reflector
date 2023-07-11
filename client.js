@@ -1,4 +1,4 @@
-const EventEmitter = require('events').EventEmitter
+const { EventEmitter } = require('eventemitter3')
 const { invariant } = require('./lib/invariant')
 const { deserializeError } = require('serialize-error')
 const promiseTimeout = require('p-timeout')
