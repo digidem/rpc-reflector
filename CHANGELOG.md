@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.9](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.8...v1.3.9) (2023-07-11)
+
+### Bug Fixes
+
+- fixes for non-node environments ([#15](https://github.com/gmaclennan/rpc-reflector/issues/15)) ([da672b8](https://github.com/gmaclennan/rpc-reflector/commit/da672b859e44d88de83ad02b762f461a710139b4))
+
 ### [1.3.9-rc.2](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.9-rc.1...v1.3.9-rc.2) (2023-07-11)
 
 ### Bug Fixes
