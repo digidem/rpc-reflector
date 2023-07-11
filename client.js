@@ -2,7 +2,6 @@ const EventEmitter = require('events').EventEmitter
 const { invariant } = require('./lib/invariant')
 const { deserializeError } = require('serialize-error')
 const promiseTimeout = require('p-timeout')
-const util = require('util')
 const isStream = require('is-stream')
 
 const isMessagePortLike = require('./lib/is-message-port-like')
@@ -192,16 +191,15 @@ function createClient(channel, { timeout = 5000 } = {}) {
         if (prop === closeProp && propArray.length === 0) {
           return () => handleClose()
         }
-        /* istanbul ignore if  */
-        if (prop === util.inspect.custom) {
-          // Only Node < 12, not called in browsers
-          return () => '[rpcProxyClient]'
-        }
+        // if (prop === util.inspect.custom) {
+        //   // Only Node < 12, not called in browsers
+        //   return () => '[rpcProxyClient]'
+        // }
         if (typeof prop !== 'string') {
           throw new Error(`ReferenceError: ${String(prop)} is not defined`)
         } else if (prop in EventEmitter.prototype) {
           const eventEmitterProp = /** @type {keyof EventEmitter} */ (prop)
-          if (emitterSubscribeMethods.includes(prop)) {
+          if (emitterSubscribeMethods.includes(eventEmitterProp)) {
             return /** @type {(...args: any[]) => Client} */ (...args) => {
               const originalEventName = args[0]
               args[0] = stringify(propArray, originalEventName)
@@ -209,7 +207,7 @@ function createClient(channel, { timeout = 5000 } = {}) {
               send([msgType.ON, originalEventName, propArray])
               return proxy
             }
-          } else if (emitterUnsubscribeMethods.includes(prop)) {
+          } else if (emitterUnsubscribeMethods.includes(eventEmitterProp)) {
             return /** @type {(...args: any[]) => Client} */ (...args) => {
               const originalEventName = args[0]
               args[0] = stringify(propArray, originalEventName)
@@ -219,7 +217,7 @@ function createClient(channel, { timeout = 5000 } = {}) {
               }
               return proxy
             }
-          } else if (prop === 'eventNames') {
+          } else if (eventEmitterProp === 'eventNames') {
             return /** @type {(...args: any[]) => string[]} */ (...args) => {
               /** @type {string[]} */
               const eventNames = Reflect.apply(
@@ -229,7 +227,7 @@ function createClient(channel, { timeout = 5000 } = {}) {
               )
               return eventNames.reduce((acc, encodedEventName) => {
                 const [eventPropArray, eventName] = parse(encodedEventName)
-                if (util.isDeepStrictEqual(eventPropArray, propArray)) {
+                if (isStringArrayEqual(eventPropArray, propArray)) {
                   acc.push(eventName)
                 }
                 return acc
@@ -310,4 +308,19 @@ function concatStreamedResponse(streamedResponse) {
  */
 function isNonEmptyStringArray(arr) {
   return arr.length > 0
+}
+
+/**
+ * Compare two arrays of strings to see if they are "deeply" equal
+ *
+ * @param {string[]} arr1
+ * @param {string[]} arr2
+ * @returns {boolean}
+ */
+function isStringArrayEqual(arr1, arr2) {
+  if (arr1.length !== arr2.length) return false
+  for (const [index, item] of arr1.entries()) {
+    if (item !== arr2[index]) return false
+  }
+  return true
 }
