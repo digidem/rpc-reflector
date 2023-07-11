@@ -3,7 +3,7 @@
   "version": "1.3.9-rc.0",
   "description": "Call methods on an object over RPC",
   "main": "index.js",
-  "types": "./dist/index.d.ts",
+  "types": "index.d.ts",
   "scripts": {
     "test": "tap --no-check-coverage test/**/*.test.js",
     "coverage": "mkdir -p coverage && tap --no-check-coverage --coverage-report=text-lcov > ./coverage/lcov.info",

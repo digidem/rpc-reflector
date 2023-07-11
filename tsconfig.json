@@ -10,8 +10,6 @@
     "checkJs": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "declarationMap": true,
-    "declarationDir": "dist",
     "typeRoots": ["types", "node_modules/@types"]
   },
   "files": ["index.js"]
