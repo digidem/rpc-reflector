@@ -1,9 +1,9 @@
 {
   "name": "rpc-reflector",
-  "version": "1.3.8",
+  "version": "1.3.9-rc.2",
   "description": "Call methods on an object over RPC",
   "main": "index.js",
-  "types": "./dist/index.d.ts",
+  "types": "index.d.ts",
   "scripts": {
     "test": "tap --no-check-coverage test/**/*.test.js",
     "coverage": "mkdir -p coverage && tap --no-check-coverage --coverage-report=text-lcov > ./coverage/lcov.info",
@@ -22,6 +22,7 @@
     "@msgpack/msgpack": "^1.12.1",
     "@types/node": "^18.16.19",
     "duplexify": "^4.1.2",
+    "eventemitter3": "^5.0.1",
     "is-stream": "^2.0.1",
     "length-prefixed-stream": "^2.0.0",
     "p-timeout": "^4.1.0",
@@ -56,10 +57,10 @@
     "server.js",
     "encode-decode.js",
     "client.js",
+    "*.d.ts",
     "CHANGELOG.md",
     "lib/",
-    "examples/",
-    "dist/"
+    "examples/"
   ],
   "directories": {
     "example": "examples",

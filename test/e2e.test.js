@@ -2,6 +2,7 @@
 const test = require('tape-async')
 const { createClient, createServer } = require('..')
 const { EventEmitter } = require('events')
+const { EventEmitter: EventEmitter3 } = require('eventemitter3')
 const fs = require('fs')
 const path = require('path')
 const intoStream = require('into-stream')
@@ -127,9 +128,9 @@ runTests(function setup(api, opts) {
  * @param {SetupFunction} setup
  */
 function runTests(setup) {
-  test('Client is instance of EventEmitter', (t) => {
+  test('Client is instance of EventEmitter3', (t) => {
     const { client } = setup(myApi)
-    t.ok(client instanceof EventEmitter)
+    t.ok(client instanceof EventEmitter3)
     t.end()
   })
 
@@ -374,7 +375,7 @@ function runTests(setup) {
     const { client } = setup({ namespace: emitterApi })
     const expected = ['param1', { other: true }]
     t.true(
-      client.namespace instanceof EventEmitter,
+      client.namespace instanceof EventEmitter3,
       'nested prop is an event emitter'
     )
     client.namespace.on('myEvent', (...args) => {
@@ -480,11 +481,11 @@ function runTests(setup) {
     const noop = () => {}
     client.on('myEvent', noop)
     t.deepEqual(client.eventNames(), ['myEvent'])
-    t.equal(
-      client.getMaxListeners(),
-      emitterApi.getMaxListeners(),
-      'getMaxListeners() works'
-    )
+    // t.equal(
+    //   client.getMaxListeners(),
+    //   emitterApi.getMaxListeners(),
+    //   'getMaxListeners() works'
+    // )
     // client.setMaxListeners(5)
     // t.equal(client.getMaxListeners(), 5)
     // t.equal(client.rawListeners('myEvent')[0], noop)

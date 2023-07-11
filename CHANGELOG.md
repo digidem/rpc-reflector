@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.9-rc.2](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.9-rc.1...v1.3.9-rc.2) (2023-07-11)
+
+### Bug Fixes
+
+- include client types in pkg ([5a295bd](https://github.com/gmaclennan/rpc-reflector/commit/5a295bd7929745cf6ef2807440cd326292445768))
+
+### [1.3.9-rc.1](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.9-rc.0...v1.3.9-rc.1) (2023-07-11)
+
+### Bug Fixes
+
+- types support require('rpc-reflector/client') ([5743a31](https://github.com/gmaclennan/rpc-reflector/commit/5743a310238f863889eb733f57c65d9d7253fb5d))
+
+### [1.3.9-rc.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.8...v1.3.9-rc.0) (2023-07-11)
+
+### Bug Fixes
+
+- remove dep on 'util' ([d6019a5](https://github.com/gmaclennan/rpc-reflector/commit/d6019a562d9776ae45bda7a3e891e936983f6a61))
+- Use eventemitter3 on the client ([0280758](https://github.com/gmaclennan/rpc-reflector/commit/0280758b078542f59bfa9ffe2e0dccc6323f440b))
+- Work without 'process' ([45de977](https://github.com/gmaclennan/rpc-reflector/commit/45de977a05abe8b1cd05feeb389d047f2496bd3b))
+
 ### [1.3.8](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.7...v1.3.8) (2023-07-06)
 
 ### Bug Fixes

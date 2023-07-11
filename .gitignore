@@ -116,3 +116,5 @@ dist
 
 # Type declarations
 /dist
+*.d.ts
+!types/*.d.ts
