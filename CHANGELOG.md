@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.10](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.9...v1.3.10) (2023-07-28)
+
+### Bug Fixes
+
+- ClientApi type: exclude unavailable methods ([6459521](https://github.com/gmaclennan/rpc-reflector/commit/6459521bcfa3a77da4f84d9ee56c29081be17a74))
+
 ### [1.3.9](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.8...v1.3.9) (2023-07-11)
 
 ### Bug Fixes
