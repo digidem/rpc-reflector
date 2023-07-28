@@ -89,10 +89,17 @@ type Filter<KeyType, ExcludeType> = KeyType extends ExcludeType
   ? never
   : KeyType
 
+// These EventEmitter methods are unavailable in EventEmitter3, which is what is used on the client
+type UnavailableEmitterMethods =
+  | 'setMaxListeners'
+  | 'getMaxListeners'
+  | 'prependListener'
+  | 'prependOnceListener'
+
 export type ClientApi<ServerApi extends {}> = {
   [KeyType in keyof ServerApi as Filter<
     KeyType,
-    Symbol
+    Symbol | UnavailableEmitterMethods
   >]: KeyType extends keyof EventEmitter
     ? ServerApi[KeyType]
     : ServerApi[KeyType] extends (...args: any[]) => any
