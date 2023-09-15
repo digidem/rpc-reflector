@@ -550,4 +550,11 @@ function runTests(setup) {
     t.doesNotThrow(() => console.log(client.add(1, 2)))
     t.end()
   })
+
+  test('Can await client', async (t) => {
+    const { client } = setup(myApi)
+    const awaited = await client
+    t.is(awaited, client, 'Same object is returned when awaiting')
+    t.end()
+  })
 }
