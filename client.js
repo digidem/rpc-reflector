@@ -197,6 +197,8 @@ function createClient(channel, { timeout = 5000 } = {}) {
         // }
         if (typeof prop !== 'string') {
           throw new Error(`ReferenceError: ${String(prop)} is not defined`)
+        } else if (prop === 'then') {
+          return null
         } else if (prop in EventEmitter.prototype) {
           const eventEmitterProp = /** @type {keyof EventEmitter} */ (prop)
           if (emitterSubscribeMethods.includes(eventEmitterProp)) {
