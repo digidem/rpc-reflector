@@ -106,19 +106,21 @@ runTests(function setup(api, opts) {
   }
 })
 
-// Run tests with Duplex Stream
-// @ts-ignore
-runTests(function setup(api, opts) {
-  const { socket1, socket2 } = new DuplexPair({ objectMode: true })
+if (!process.env.TAP_ONLY) {
+  // Run tests with Duplex Stream
+  // @ts-ignore
+  runTests(function setup(api, opts) {
+    const { socket1, socket2 } = new DuplexPair({ objectMode: true })
 
-  const serverStream = socket1
-  const clientStream = socket2
+    const serverStream = socket1
+    const clientStream = socket2
 
-  return {
-    client: createClient(clientStream, opts),
-    server: createServer(api, serverStream),
-  }
-})
+    return {
+      client: createClient(clientStream, opts),
+      server: createServer(api, serverStream),
+    }
+  })
+}
 
 /**
  * @typedef {<T extends {}>(api: T, opts?: Parameters<typeof createClient>[1]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
@@ -551,10 +553,21 @@ function runTests(setup) {
     t.end()
   })
 
-  test('Can await client', async (t) => {
+  test('client properties are stable', (t) => {
+    // If we don't cache the proxy returned by accessing a property like
+    // `client.namespace`, then each time you access it a new Proxy will be
+    // created.
     const { client } = setup(myApi)
-    const awaited = await client
-    t.is(awaited, client, 'Same object is returned when awaiting')
+    t.is(client.namespace, client.namespace)
+    t.is(client.deep.nested, client.deep.nested)
+    t.end()
+  })
+
+  test('Can await client and subclients', async (t) => {
+    const { client } = setup(myApi)
+    t.is(await client, client, 'Same object is returned when awaiting')
+    t.is(await client.deep, client.deep)
+    t.is(await client.deep.nested, client.deep.nested)
     t.end()
   })
 }

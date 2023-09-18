@@ -178,6 +178,8 @@ function createClient(channel, { timeout = 5000 } = {}) {
     emitter.removeAllListeners()
   }
 
+  const subClientCache = new Map()
+
   return createSubClient([], {})
 
   /**
@@ -185,6 +187,9 @@ function createClient(channel, { timeout = 5000 } = {}) {
    * @param {Function | {}} target
    * @returns {ClientApi<ApiType>} */
   function createSubClient(propArray, target) {
+    const cached = subClientCache.get(JSON.stringify(propArray))
+    if (cached) return cached
+
     /** @type {ProxyHandler<any>} */
     const handler = {
       get(target, prop) {
@@ -274,6 +279,14 @@ function createClient(channel, { timeout = 5000 } = {}) {
     }
 
     const proxy = new Proxy(target, handler)
+
+    if (propArray.length > 0) {
+      // In some ways this is a memory leak, but only if a client tries to
+      // access large numbers of methods. If the client respects the client
+      // type, then this is just lazily creating the API object referenced on
+      // the server.
+      subClientCache.set(JSON.stringify(propArray), proxy)
+    }
 
     return proxy
   }
