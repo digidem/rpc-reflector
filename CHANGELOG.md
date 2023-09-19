@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.3.11](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.10...v1.3.11) (2023-09-19)
+
+### Bug Fixes
+
+- always return same object from client prop ([#18](https://github.com/gmaclennan/rpc-reflector/issues/18)) ([8517f2f](https://github.com/gmaclennan/rpc-reflector/commit/8517f2f44d34a0fe96ebc12ee4525f799a636626))
+- Can await returned client ([#17](https://github.com/gmaclennan/rpc-reflector/issues/17)) ([7451dc3](https://github.com/gmaclennan/rpc-reflector/commit/7451dc3e253d50d21f99b7e2c3de12fd22afd125))
+
 ### [1.3.10](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.9...v1.3.10) (2023-07-28)
 
 ### Bug Fixes
