@@ -1,4 +1,4 @@
-import { ErrorObject } from 'serialize-error'
+import type { ErrorObject } from 'serialize-error'
 import { EventEmitter } from 'events'
 import { Readable } from 'stream'
 
