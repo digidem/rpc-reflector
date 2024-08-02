@@ -1,6 +1,6 @@
 import type { ErrorObject } from 'serialize-error'
-import { EventEmitter } from 'events'
-import { Readable } from 'stream'
+import type { EventEmitter } from 'events'
+import type { Readable } from 'stream'
 
 export enum msgType {
   REQUEST = 0,
