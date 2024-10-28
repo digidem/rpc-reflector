@@ -2,13 +2,7 @@ import type { ErrorObject } from 'serialize-error'
 import type { EventEmitter } from 'events'
 import type { Readable } from 'stream'
 
-export enum msgType {
-  REQUEST = 0,
-  RESPONSE = 1,
-  ON = 2,
-  OFF = 3,
-  EMIT = 4,
-}
+import type { msgType } from './constants'
 
 export interface test {
   foo: boolean
