@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.11...v2.0.0) (2025-07-08)
+
+### ⚠ BREAKING CHANGES
+
+- Switch to ESM & update deps (#23)
+
+### Bug Fixes
+
+- another fix for compatability with verbatimModuleSyntax config option ([#22](https://github.com/gmaclennan/rpc-reflector/issues/22)) ([d496387](https://github.com/gmaclennan/rpc-reflector/commit/d4963871dbbf7e3c3dfebef1e07b6465c2172775))
+- fix compatibility with verbatimModuleSyntax TS config option ([#20](https://github.com/gmaclennan/rpc-reflector/issues/20)) ([e7c1bec](https://github.com/gmaclennan/rpc-reflector/commit/e7c1becbc6fa7c9c1345b99ca20fc3331dc756af))
+
+- Switch to ESM & update deps ([#23](https://github.com/gmaclennan/rpc-reflector/issues/23)) ([0fd2f49](https://github.com/gmaclennan/rpc-reflector/commit/0fd2f49da426ea42a9bb580a409a6171924876f4))
+
 ### [1.3.11](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.10...v1.3.11) (2023-09-19)
 
 ### Bug Fixes
