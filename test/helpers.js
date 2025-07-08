@@ -1,6 +1,7 @@
-const { EventEmitter } = require('events')
+import { EventEmitter } from 'events'
+import { Readable } from 'readable-stream'
 
-class MessagePortLike extends EventEmitter {
+export class MessagePortLike extends EventEmitter {
   /** @param {(data: any) => void} handler */
   constructor(handler) {
     super()
@@ -12,7 +13,7 @@ class MessagePortLike extends EventEmitter {
   }
 }
 
-class MessagePortPair {
+export class MessagePortPair {
   constructor() {
     /** @type {MessagePortLike} */
     this.port1 = new MessagePortLike((data) => this.port2.emit('message', data))
@@ -21,4 +22,13 @@ class MessagePortPair {
   }
 }
 
-module.exports = { MessagePortPair, MessagePortLike }
+export class ReadableError extends Readable {
+  /** @param {Error} err */
+  constructor(err) {
+    super({
+      read: () => {
+        this.emit('error', err)
+      },
+    })
+  }
+}
