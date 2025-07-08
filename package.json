@@ -4,13 +4,13 @@
   "description": "Call methods on an object over RPC",
   "main": "lib/index.js",
   "type": "module",
-  "types": "dist/index.d.ts",
+  "types": "dist/lib/index.d.ts",
   "scripts": {
     "test": "c8 --check-coverage tape 'test/**/*.test.js'",
     "posttest": "c8 report --reporter=text-lcov > ./coverage/lcov.info",
     "type": "tsc",
     "format": "prettier --write .",
-    "link": "eslint --cache .",
+    "lint": "eslint --cache .",
     "prepare": "husky",
     "build:types": "rimraf \"dist/\" && tsc -p tsconfig.publish.json",
     "prepack": "npm run build:types"
