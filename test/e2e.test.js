@@ -124,6 +124,21 @@ function runTests(setup) {
     t.end()
   })
 
+  test('non-MessagePort arg throws', (t) => {
+    // @ts-expect-error
+    t.throws(() => createClient({}), 'Throws when no MessagePort is passed')
+    t.throws(
+      // @ts-expect-error
+      () => createServer({}, {}),
+      'Throws when no MessagePort is passed to server',
+    )
+    // @ts-expect-error
+    t.throws(() => createClient(null), 'Throws for null')
+    // @ts-expect-error
+    t.throws(() => createClient(1), 'Throws for non-object')
+    t.end()
+  })
+
   test('Calls methods on server', async (t) => {
     const { client } = setup(myApi)
     t.plan(9)
