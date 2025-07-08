@@ -2,9 +2,24 @@
   "name": "rpc-reflector",
   "version": "1.3.11",
   "description": "Call methods on an object over RPC",
-  "main": "lib/index.js",
   "type": "module",
-  "types": "dist/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./dist/lib/client.d.ts",
+      "import": "./lib/client.js",
+      "default": "./lib/client.js"
+    },
+    "./server": {
+      "types": "./dist/lib/server.d.ts",
+      "import": "./lib/server.js",
+      "default": "./lib/server.js"
+    }
+  },
   "scripts": {
     "test": "c8 --check-coverage tape 'test/**/*.test.js'",
     "posttest": "c8 report --reporter=text-lcov > ./coverage/lcov.info",
