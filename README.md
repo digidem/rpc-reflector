@@ -34,30 +34,31 @@ npm install rpc-reflector
 
 ```ts
 import { createClient, createServer } from 'rpc-reflector'
-import DuplexPair from 'native-duplexpair'
+import { MessagePortPair } from '../test/helpers.js'
 
 const myApi = {
   syncMethod: () => 'result1',
   asyncMethod: () =>
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       setTimeout(() => resolve('result2'), 200)
     }),
 }
 
-// Create two duplex sockets linked together
-const { socket1, socket2 } = new DuplexPair({ objectMode: true })
+const { port1: serverPort, port2: clientPort } = new MessagePortPair()
 
-const serverStream = socket1
-const clientStream = socket2
+const { close } = createServer(myApi, serverPort)
 
-const { close } = createServer(myApi, serverStream)
-const myApiOnClient = createClient<typeof myApi>(clientStream)
+const myApiOnClient =
+  /** @type {import('../index.js').ClientApi<typeof myApi>} */ createClient(
+    clientPort,
+  )
 
 ;(async () => {
   const result1 = await myApiOnClient.syncMethod()
   const result2 = await myApiOnClient.asyncMethod()
   console.log(result1) // 'result1'
   console.log(result2) // 'result2'
+  close()
 })()
 ```
 
@@ -67,11 +68,11 @@ const myApiOnClient = createClient<typeof myApi>(clientStream)
 
 `api` can be any object with any properties, methods and events that you want reflected in the client API.
 
-`channel` can be a [Duplex Stream](https://nodejs.org/api/stream.html#stream_class_stream_duplex), a browser [MessagePort](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort), a Node [Worker MessagePort](https://nodejs.org/api/worker_threads.html#worker_threads_class_messageport) or a MessagePort-like object that defines a `postMessage()` method and implements an `EventEmitter` that emits an event named `'message'`.
+`channel` can be a browser [MessagePort](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort), a Node [Worker MessagePort](https://nodejs.org/api/worker_threads.html#worker_threads_class_messageport) or a MessagePort-like object that defines a `postMessage()` method and implements an `EventEmitter` that emits an event named `'message'`.
 
 If `channel` is a MessagePort you will need to manually call [`port.start()`](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort/start) to start sending messages queued in the port.
 
-`close()` is used to remove event listeners from the channel. It will not close or destroy the MessagePort or Stream used as the `channel`.
+`close()` is used to remove event listeners from the channel. It will not close or destroy the MessagePort used as the `channel`.
 
 ### `const clientApi = createClient(channel)`
 
@@ -90,12 +91,6 @@ The returned `clientApi` will be correctly typed, with synchronous functions con
 ### `createClient.close(clientApi)`
 
 The static method `close()` will remove all event listeners from the `channel` used to create the client. It will not close or destroy the MessagePort or Stream used as the `channel`.
-
-### const unencodedDuplex = createEncodeDecodeStream(duplex, opts)
-
-`createServer()` and `createClient()` write messages to the Stream or MessagePort as objects, and they expect the messages read from the Stream or MessagePort to be objects. If you are using a socket or TCP stream as a transport for RPC messages, you will need to encode the objects as buffers. The `createEncodeDecodeStream()` helper will encode and decode messages over the `duplex` stream using [MessagePack](https://msgpack.org).
-
-`opts.encoding` An encoding object that contains `encode(value)` and `decode(buffer)` functions for encoding values to and from buffers. Defaults to [MessagePack](https://msgpack.org) encoding with support for encoding/decoding Buffers. See the [default implementation](encode-decode.js)
 
 ## Maintainers
 

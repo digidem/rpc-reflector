@@ -1,4 +1,4 @@
-import { createClient, createServer } from '../index.js'
+import { createClient, createServer } from 'rpc-reflector'
 import { MessagePortPair } from '../test/helpers.js'
 
 const myApi = {
