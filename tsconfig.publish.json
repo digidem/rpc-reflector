@@ -7,5 +7,5 @@
     "noEmitOnError": true,
     "outDir": "dist"
   },
-  "include": ["lib/**/*"]
+  "include": ["lib/**/*", "index.js"]
 }
