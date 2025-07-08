@@ -1,6 +1,6 @@
 import test from 'tape'
 
-import { createClient } from '../lib/index.js'
+import { createClient } from '../index.js'
 import { msgType } from '../lib/constants.js'
 import invalidMessages from './fixtures/invalid-messages.js'
 import { MessagePortPair } from './helpers.js'

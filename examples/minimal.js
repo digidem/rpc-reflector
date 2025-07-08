@@ -1,4 +1,4 @@
-import { createClient, createServer } from '../lib/index.js'
+import { createClient, createServer } from '../index.js'
 import { MessagePortPair } from '../test/helpers.js'
 
 const myApi = {
@@ -14,7 +14,7 @@ const { port1: serverPort, port2: clientPort } = new MessagePortPair()
 const { close } = createServer(myApi, serverPort)
 
 const myApiOnClient =
-  /** @type {import('../lib/index.js').ClientApi<typeof myApi>} */ (
+  /** @type {import('../index.js').ClientApi<typeof myApi>} */ (
     createClient(clientPort)
   )
 

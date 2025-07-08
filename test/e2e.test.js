@@ -1,6 +1,6 @@
 // @ts-check
 import test from 'tape'
-import { createClient, createServer } from '../lib/index.js'
+import { createClient, createServer } from '../index.js'
 import { EventEmitter } from 'events'
 import { EventEmitter as EventEmitter3 } from 'eventemitter3'
 import { readFileSync, createReadStream } from 'fs'

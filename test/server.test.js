@@ -1,7 +1,7 @@
 //@ts-nocheck
 import test from 'tape'
 
-import { createServer } from '../lib/index.js'
+import { createServer } from '../index.js'
 import invalidMessages from './fixtures/invalid-messages.js'
 import { MessagePortPair } from './helpers.js'
 
