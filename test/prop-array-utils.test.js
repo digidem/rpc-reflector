@@ -1,5 +1,5 @@
-const test = require('tape-async')
-const { parse } = require('../lib/prop-array-utils')
+import test from 'tape'
+import { parse } from '../lib/prop-array-utils.js'
 
 const invalidStringified = [
   { foo: 'bar' },

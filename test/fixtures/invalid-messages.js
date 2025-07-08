@@ -1,4 +1,4 @@
-module.exports = [
+export default [
   Buffer.from('hello'),
   Uint8Array.from([1, 2]),
   [0],

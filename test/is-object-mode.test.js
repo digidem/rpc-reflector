@@ -1,7 +1,7 @@
-const test = require('tape-async')
-const { Readable } = require('readable-stream')
-const { Readable: Readable3 } = require('readable-stream')
-const isObjectMode = require('../lib/is-object-mode-readable')
+import test from 'tape'
+import { Readable } from 'readable-stream'
+import { Readable as Readable3 } from 'readable-stream'
+import { isObjectMode } from '../lib/is-object-mode-readable.js'
 
 test('Detects if ReadableStream is in objectMode', (t) => {
   t.true(isObjectMode(new Readable({ objectMode: true })), 'detects objectMode')
@@ -10,7 +10,7 @@ test('Detects if ReadableStream is in objectMode', (t) => {
   t.true(
     // @ts-ignore
     isObjectMode(new Readable3({ objectMode: true })),
-    'detects objectMode'
+    'detects objectMode',
   )
   // @ts-ignore
   t.false(isObjectMode(new Readable3()), 'detects not objectMode')

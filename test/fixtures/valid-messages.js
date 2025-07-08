@@ -1,4 +1,4 @@
-/** @type {import('../../lib/types').Message[]} */
+/** @type {import('../../lib/types.js').Message[]} */
 const validMessages = [
   [0, 2, ['anyMethod'], []],
   [0, 3, ['anyMethod'], ['param2', { other: 'param' }]],
@@ -16,4 +16,4 @@ const validMessages = [
   [4, 'eventName', [], { message: 'Error Message' }],
 ]
 
-module.exports = validMessages
+export default validMessages

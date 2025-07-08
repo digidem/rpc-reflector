@@ -1,16 +1,13 @@
-// @ts-nocheck
-const test = require('tape-async')
-const { PassThrough } = require('readable-stream')
-const duplexify = require('duplexify')
+//@ts-nocheck
+import test from 'tape'
 
-const { createServer } = require('..')
-const invalidMessages = require('./fixtures/invalid-messages')
+import { createServer } from '../index.js'
+import invalidMessages from './fixtures/invalid-messages.js'
+import { MessagePortPair } from './helpers.js'
 
 test('Ignores invalid messages', (t) => {
   t.plan(1)
-  const writeable = new PassThrough({ objectMode: true })
-  const readable = new PassThrough({ objectMode: true })
-  const stream = duplexify(writeable, readable, { objectMode: true })
+  const { port1, port2 } = new MessagePortPair()
 
   const validOnlyForClient = [
     [1, 4, null, 'returnedValue'],
@@ -24,12 +21,12 @@ test('Ignores invalid messages', (t) => {
     [4, 'eventName', [], { message: 'Error Message' }],
   ]
 
-  writeable.on('data', () => {
+  port2.on('message', () => {
     t.fail('Should ignore all invalid messages')
   })
-  createServer({}, stream)
+  createServer({}, port1)
   for (const msg of invalidMessages.concat(validOnlyForClient)) {
-    readable.write(msg)
+    port2.postMessage(msg)
   }
   t.pass('Ignored all invalid messages')
 })

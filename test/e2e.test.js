@@ -1,22 +1,26 @@
 // @ts-check
-const test = require('tape-async')
-const { createClient, createServer } = require('..')
-const { EventEmitter } = require('events')
-const { EventEmitter: EventEmitter3 } = require('eventemitter3')
-const fs = require('fs')
-const path = require('path')
-const intoStream = require('into-stream')
-const ReadableError = require('readable-error')
-const DuplexPair = require('native-duplexpair')
-const { MessagePortPair } = require('./helpers')
+import test from 'tape'
+import { createClient, createServer } from '../index.js'
+import { EventEmitter } from 'events'
+import { EventEmitter as EventEmitter3 } from 'eventemitter3'
+import { readFileSync, createReadStream } from 'fs'
+import { join } from 'path'
+import intoStream from 'into-stream'
+import { MessagePortPair, ReadableError } from './helpers.js'
+import ensureError from 'ensure-error'
+import { fileURLToPath } from 'url'
+import path from 'path'
 
 /**
  * @template {{}} ApiType
- * @typedef {import('../lib/types').ClientApi<ApiType>} ClientApi
+ * @typedef {import('../lib/types.js').ClientApi<ApiType>} ClientApi
  */
 
-const fixturePath = path.join(__dirname, 'fixtures/lorem.txt')
-const fixtureBuf = fs.readFileSync(fixturePath)
+const fixturePath = join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'fixtures/lorem.txt',
+)
+const fixtureBuf = readFileSync(fixturePath)
 const objectsFixture = fixtureBuf
   .toString()
   .split(' ')
@@ -62,7 +66,7 @@ const myApi = {
     },
   },
   async getLlama() {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       setTimeout(() => {
         resolve('llama')
       }, 200)
@@ -77,7 +81,7 @@ const myApi = {
   createStringStream() {
     // Set highWaterMark to force chunking to ensure that concat works on client
     // (each chunk is sent as a separate message)
-    return fs.createReadStream(fixturePath, {
+    return createReadStream(fixturePath, {
       highWaterMark: 10,
       encoding: 'utf8',
     })
@@ -85,7 +89,7 @@ const myApi = {
   createBufferStream() {
     // Set highWaterMark to force chunking to ensure that concat works on client
     // (each chunk is sent as a separate message)
-    return fs.createReadStream(fixturePath, { highWaterMark: 10 })
+    return createReadStream(fixturePath, { highWaterMark: 10 })
   },
   /** @param {object} o */
   createObjectStream(o) {
@@ -106,22 +110,6 @@ runTests(function setup(api, opts) {
   }
 })
 
-if (!process.env.TAP_ONLY) {
-  // Run tests with Duplex Stream
-  // @ts-ignore
-  runTests(function setup(api, opts) {
-    const { socket1, socket2 } = new DuplexPair({ objectMode: true })
-
-    const serverStream = socket1
-    const clientStream = socket2
-
-    return {
-      client: createClient(clientStream, opts),
-      server: createServer(api, serverStream),
-    }
-  })
-}
-
 /**
  * @typedef {<T extends {}>(api: T, opts?: Parameters<typeof createClient>[1]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
  */
@@ -136,6 +124,21 @@ function runTests(setup) {
     t.end()
   })
 
+  test('non-MessagePort arg throws', (t) => {
+    // @ts-expect-error
+    t.throws(() => createClient({}), 'Throws when no MessagePort is passed')
+    t.throws(
+      // @ts-expect-error
+      () => createServer({}, {}),
+      'Throws when no MessagePort is passed to server',
+    )
+    // @ts-expect-error
+    t.throws(() => createClient(null), 'Throws for null')
+    // @ts-expect-error
+    t.throws(() => createClient(1), 'Throws for non-object')
+    t.end()
+  })
+
   test('Calls methods on server', async (t) => {
     const { client } = setup(myApi)
     t.plan(9)
@@ -144,25 +147,25 @@ function runTests(setup) {
     t.equal(
       await client.createStringStream(),
       fixtureBuf.toString(),
-      'Readable stream as string works'
+      'Readable stream as string works',
     )
     t.ok(
       fixtureBuf.equals(
         // I have not found an easy way to automatically type the return type of streams
-        /** @type {Uint8Array} */ (await client.createBufferStream())
+        /** @type {Uint8Array} */ (await client.createBufferStream()),
       ),
-      'Readable buffer works'
+      'Readable buffer works',
     )
     t.deepEqual(
       await client.createObjectStream(objectsFixture),
       objectsFixture,
-      'Readable stream as object works'
+      'Readable stream as object works',
     )
     const arrayOfStrings = objectsFixture.toString().split(' ')
     t.deepEqual(
       await client.createObjectStream(arrayOfStrings),
       arrayOfStrings,
-      'An object stream returns as an array of chunks, not as a concatenated string'
+      'An object stream returns as an array of chunks, not as a concatenated string',
     )
     const arrayOfBuffers = objectsFixture
       .toString()
@@ -171,22 +174,26 @@ function runTests(setup) {
     t.deepEqual(
       await client.createObjectStream(arrayOfBuffers),
       arrayOfBuffers,
-      'An object stream returns as an array of chunks, not as a concatenated buffer'
+      'An object stream returns as an array of chunks, not as a concatenated buffer',
     )
     try {
       await client.errorMethod()
       t.fail('Should not reach here')
     } catch (err) {
-      t.equal(err.message, 'TestError', 'Error from server is passed to client')
+      t.equal(
+        ensureError(err).message,
+        'TestError',
+        'Error from server is passed to client',
+      )
     }
     try {
       await client.createErrorStream()
       t.fail('Should not reach here')
     } catch (err) {
       t.equal(
-        err.message,
+        ensureError(err).message,
         'TestError',
-        'Error from server stream is passed to client'
+        'Error from server stream is passed to client',
       )
     }
   })
@@ -203,9 +210,9 @@ function runTests(setup) {
     } catch (error) {
       t.true(error instanceof Error, 'Calling missing method threw')
       t.equal(
-        error.message,
+        ensureError(error).message,
         'missingMethod is not defined',
-        'Error message as expected'
+        'Error message as expected',
       )
     }
     try {
@@ -215,9 +222,9 @@ function runTests(setup) {
     } catch (error) {
       t.true(error instanceof Error, 'Calling with missing namespace threw')
       t.equal(
-        error.message,
+        ensureError(error).message,
         'missingNameSpace is not defined',
-        'Error message as expected'
+        'Error message as expected',
       )
     }
     try {
@@ -226,20 +233,29 @@ function runTests(setup) {
       try {
         // @ts-expect-error
         horse = await client.deep.missingNameSpace('horse')
-      } catch (e) {}
+      } catch {
+        // ignore error
+      }
       await horse.sub('donkey?')
       t.fail('Should not get here')
     } catch (error) {
-      t.true(error instanceof Error, 'Calling with missing namespace threw')
-      t.ok(error.message.match('undefined'), 'Error message as expected')
+      t.ok(error instanceof Error, 'Calling with missing namespace threw')
+      t.ok(
+        ensureError(error).message.match('undefined'),
+        'Error message as expected',
+      )
     }
     try {
       // @ts-expect-error
       await client.prop.oops('donkey?')
       t.fail('Should not get here')
     } catch (error) {
-      t.true(error instanceof Error, 'Calling method on prop fails')
-      t.equal(error.message, 'oops is not defined', 'Error message as expected')
+      t.ok(error instanceof Error, 'Calling method on prop fails')
+      t.equal(
+        ensureError(error).message,
+        'oops is not defined',
+        'Error message as expected',
+      )
     }
   })
 
@@ -253,9 +269,9 @@ function runTests(setup) {
     } catch (error) {
       t.true(error instanceof Error, 'Threw with error')
       t.equal(
-        error.message,
+        ensureError(error).message,
         'missingMethod is not defined',
-        'Error message as expected'
+        'Error message as expected',
       )
     }
     t.end()
@@ -268,7 +284,10 @@ function runTests(setup) {
       await client.add(1, 2)
     } catch (error) {
       t.true(error instanceof Error, 'Threw with error')
-      t.true(error.message.includes('timed out'), 'Error message as expected')
+      t.true(
+        ensureError(error).message.includes('timed out'),
+        'Error message as expected',
+      )
     }
     t.end()
   })
@@ -298,7 +317,7 @@ function runTests(setup) {
       t.deepEqual(
         await client[prop](),
         myApi[prop],
-        'property returns promise that resolves to property value'
+        'property returns promise that resolves to property value',
       )
     }
   })
@@ -312,7 +331,7 @@ function runTests(setup) {
           // @ts-expect-error
           await client[prop].missingMethod(),
           myApi[prop],
-          'property returns promise that resolves to property value'
+          'property returns promise that resolves to property value',
         )
         t.fail('Should not get here')
       } catch (error) {
@@ -337,14 +356,14 @@ function runTests(setup) {
     } catch (error) {
       t.true(error instanceof Error, 'Threw with error')
       t.equal(
-        error.message,
+        ensureError(error).message,
         "Property 'symbolProp' is a Symbol",
-        'Error message as expected'
+        'Error message as expected',
       )
     }
   })
 
-  test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', async (t) => {
+  test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', (t) => {
     const { client } = setup({})
     // @ts-expect-error
     client.on('myEvent', t.fail)
@@ -366,7 +385,6 @@ function runTests(setup) {
       t.end()
     })
     process.nextTick(() => {
-      // eslint-disable-next-line no-useless-call
       emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
     })
   })
@@ -378,14 +396,13 @@ function runTests(setup) {
     const expected = ['param1', { other: true }]
     t.true(
       client.namespace instanceof EventEmitter3,
-      'nested prop is an event emitter'
+      'nested prop is an event emitter',
     )
     client.namespace.on('myEvent', (...args) => {
       t.deepEqual(args, expected)
       t.end()
     })
     process.nextTick(() => {
-      // eslint-disable-next-line no-useless-call
       emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
     })
   })
@@ -397,7 +414,7 @@ function runTests(setup) {
 
     client.on('myEvent', function listener(...args) {
       if (count++ > 0) return t.fail('Called more than once')
-      t.deepEqual(args, ['carrot'])
+      t.deepEqual(args, ['carrot'], 'Listener called with correct args')
       client.off('myEvent', listener)
     })
 
@@ -422,7 +439,7 @@ function runTests(setup) {
       client.off('myEvent', listener1)
     })
 
-    client.on('myEvent', function listener2(...args) {
+    client.on('myEvent', function listener2() {
       if (count2++ === 0) return
       t.equal(count2, 2, 'Second listener was called twice')
     })
@@ -446,7 +463,6 @@ function runTests(setup) {
       t.equal(error.message, 'TestError', 'Error message is valid')
     })
     process.nextTick(() => {
-      // eslint-disable-next-line no-useless-call
       emitterApi.emit.apply(emitterApi, ['error', expected])
     })
   })
@@ -469,7 +485,7 @@ function runTests(setup) {
           t.equal(
             emitterApi.eventNames().length,
             0,
-            'No more listeners on server'
+            'No more listeners on server',
           )
           setTimeout(t.end, 200)
         })
@@ -533,13 +549,17 @@ function runTests(setup) {
     try {
       await client.add(1, 2)
     } catch (err) {
-      t.ok(/timed out/.test(err.message), 'Should fail with timeout')
+      t.ok(
+        /timed out/.test(ensureError(err).message),
+        'Should fail with timeout',
+      )
     }
     t.end()
   })
 
   test('Non-string methods / props are not supported', (t) => {
     const { client } = setup(myApi)
+    // @ts-expect-error
     t.throws(() => client[Symbol('test')](), 'Calling a symbol method throws')
     t.end()
   })

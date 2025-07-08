@@ -1,9 +1,7 @@
-const test = require('tape-async')
-const isValidMessage = require('../lib/validate-message')
-
-const validMessages = require('./fixtures/valid-messages')
-
-const invalidMessages = require('./fixtures/invalid-messages')
+import test from 'tape'
+import { isValidMessage } from '../lib/validate-message.js'
+import validMessages from './fixtures/valid-messages.js'
+import invalidMessages from './fixtures/invalid-messages.js'
 
 test('Valid messages return true', (t) => {
   for (const msg of validMessages) {
@@ -16,7 +14,7 @@ test('Invalid mesages return false', (t) => {
   for (const msg of invalidMessages) {
     t.false(
       isValidMessage(msg),
-      `Message \`${JSON.stringify(msg)}\` is invalid`
+      `Message \`${JSON.stringify(msg)}\` is invalid`,
     )
   }
   t.end()

@@ -2,64 +2,64 @@
   "name": "rpc-reflector",
   "version": "1.3.11",
   "description": "Call methods on an object over RPC",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./client": {
+      "types": "./dist/lib/client.d.ts",
+      "import": "./lib/client.js",
+      "default": "./lib/client.js"
+    },
+    "./server": {
+      "types": "./dist/lib/server.d.ts",
+      "import": "./lib/server.js",
+      "default": "./lib/server.js"
+    }
+  },
   "scripts": {
-    "test": "tap --no-check-coverage test/**/*.test.js",
-    "coverage": "mkdir -p coverage && tap --no-check-coverage --coverage-report=text-lcov > ./coverage/lcov.info",
+    "test": "c8 --check-coverage tape 'test/**/*.test.js'",
+    "posttest": "c8 report --reporter=text-lcov > ./coverage/lcov.info",
     "type": "tsc",
     "format": "prettier --write .",
-    "prepack": "npm run type"
-  },
-  "husky": {
-    "hooks": {
-      "pre-commit": "pretty-quick --staged"
-    }
+    "lint": "eslint --cache .",
+    "prepare": "husky",
+    "build:types": "rimraf \"dist/\" && tsc -p tsconfig.publish.json",
+    "prepack": "npm run build:types"
   },
   "author": "Gregor MacLennan",
   "license": "ISC",
   "dependencies": {
-    "@msgpack/msgpack": "^1.12.1",
-    "@types/node": "^18.16.19",
-    "duplexify": "^4.1.2",
+    "@types/node": "^18.19.115",
+    "ensure-error": "^4.0.0",
     "eventemitter3": "^5.0.1",
-    "is-stream": "^2.0.1",
-    "length-prefixed-stream": "^2.0.0",
-    "p-timeout": "^4.1.0",
-    "pump": "^3.0.0",
-    "serialize-error": "^8.1.0",
-    "through2": "^4.0.2",
-    "validate.io-array-like": "^1.0.2"
+    "is-stream": "^4.0.1",
+    "p-timeout": "^6.1.4",
+    "readable-stream": "^4.7.0",
+    "serialize-error": "^12.0.0"
   },
   "devDependencies": {
-    "@types/concat-stream": "^1.6.1",
-    "@types/duplexify": "^3.6.0",
-    "@types/once": "^1.4.0",
-    "@types/pump": "^1.1.1",
-    "@types/readable-stream": "^2.3.15",
-    "@types/tape": "^4.2.34",
-    "@types/tape-async": "^2.3.1",
-    "@types/through2": "^2.0.36",
-    "husky": "^4.2.5",
-    "into-stream": "^6.0.0",
-    "native-duplexpair": "^1.0.0",
-    "p-is-promise": "^3.0.0",
-    "prettier": "^2.4.1",
-    "pretty-quick": "^3.1.1",
-    "readable-error": "^1.0.0",
-    "readable-stream": "^3.6.2",
-    "tap": "^15.0.10",
-    "tape-async": "^2.3.0",
-    "type-fest": "^3.12.0",
-    "typescript": "^5.1.6"
+    "@eslint/js": "^9.30.1",
+    "@types/readable-stream": "^4.0.21",
+    "@types/tape": "^5.8.1",
+    "c8": "^10.1.3",
+    "eslint": "^9.30.1",
+    "globals": "^16.3.0",
+    "husky": "^9.1.7",
+    "into-stream": "^8.0.1",
+    "prettier": "^3.6.2",
+    "rimraf": "^5.0.10",
+    "tape": "^5.9.0",
+    "typescript": "^5.8.3"
   },
   "files": [
-    "server.js",
-    "encode-decode.js",
-    "client.js",
-    "*.d.ts",
     "CHANGELOG.md",
+    "index.js",
     "lib/",
+    "dist/",
     "examples/"
   ],
   "directories": {
@@ -74,5 +74,11 @@
   "bugs": {
     "url": "https://github.com/gmaclennan/rpc-reflector/issues"
   },
-  "homepage": "https://github.com/gmaclennan/rpc-reflector#readme"
+  "homepage": "https://github.com/gmaclennan/rpc-reflector#readme",
+  "lint-staged": {
+    "*.js": [
+      "eslint --cache --fix"
+    ],
+    "*.{js,css,md}": "prettier --write"
+  }
 }

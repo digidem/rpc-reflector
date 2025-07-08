@@ -2,7 +2,7 @@ import type { ErrorObject } from 'serialize-error'
 import type { EventEmitter } from 'events'
 import type { Readable } from 'stream'
 
-import type { msgType } from './constants'
+import type { msgType } from './constants.js'
 
 export interface test {
   foo: boolean
@@ -13,9 +13,7 @@ export type NonEmptyArray<T> = [T, ...T[]]
 type msgId = number
 type prop = string
 type eventName = string
-// a function arguments is not an array, but "array-like" e.g. it does not
-// support array methods
-type args = ArrayLike<any>
+type args = Array<any>
 type params = Array<any>
 type result = any
 type more = boolean
@@ -25,7 +23,7 @@ export type MsgRequest = [
   typeof msgType.REQUEST,
   msgId,
   NonEmptyArray<prop>,
-  args
+  args,
 ]
 // The last message in a streaming request
 type MsgResponseEnd = [
@@ -34,7 +32,7 @@ type MsgResponseEnd = [
   ErrorObject | null,
   result,
   false, // More data to come?
-  isObjectMode // Last message in streaming response indicates if was objectMode
+  isObjectMode, // Last message in streaming response indicates if was objectMode
 ]
 export type MsgResponse =
   | [
@@ -42,7 +40,7 @@ export type MsgResponse =
       msgId, // messageId
       ErrorObject | null, // error
       result?, // result
-      more? // more data to come?
+      more?, // more data to come?
     ]
   | MsgResponseEnd
 export type MsgOn = [typeof msgType.ON, eventName, Array<prop>]
@@ -52,7 +50,7 @@ export type MsgEmit = [
   eventName,
   Array<prop>,
   ErrorObject | null,
-  params?
+  params?,
 ]
 export type Message = MsgRequest | MsgResponse | MsgOn | MsgOff | MsgEmit
 
@@ -75,9 +73,11 @@ type Asyncify<T extends (...args: any[]) => any> =
   ReturnType<T> extends Promise<infer Value>
     ? T
     : ReturnType<T> extends Readable
-    ? // TODO: Is there a way to type streams that we can use here?
-      (...args: Parameters<T>) => Promise<string | Buffer | Uint8Array | any[]>
-    : (...args: Parameters<T>) => Promise<ReturnType<T>>
+      ? // TODO: Is there a way to type streams that we can use here?
+        (
+          ...args: Parameters<T>
+        ) => Promise<string | Buffer | Uint8Array | any[]>
+      : (...args: Parameters<T>) => Promise<ReturnType<T>>
 
 type Filter<KeyType, ExcludeType> = KeyType extends ExcludeType
   ? never
@@ -97,12 +97,12 @@ export type ClientApi<ServerApi extends {}> = {
   >]: KeyType extends keyof EventEmitter
     ? ServerApi[KeyType]
     : ServerApi[KeyType] extends (...args: any[]) => any
-    ? Asyncify<ServerApi[KeyType]>
-    : ServerApi[KeyType] extends Array<infer T>
-    ? () => Promise<T[]>
-    : ServerApi[KeyType] extends { [key: string]: any }
-    ? ClientApi<ServerApi[KeyType]> & (() => Promise<ServerApi[KeyType]>)
-    : ServerApi[KeyType] extends Symbol
-    ? never
-    : () => Promise<ServerApi[KeyType]>
+      ? Asyncify<ServerApi[KeyType]>
+      : ServerApi[KeyType] extends Array<infer T>
+        ? () => Promise<T[]>
+        : ServerApi[KeyType] extends { [key: string]: any }
+          ? ClientApi<ServerApi[KeyType]> & (() => Promise<ServerApi[KeyType]>)
+          : ServerApi[KeyType] extends Symbol
+            ? never
+            : () => Promise<ServerApi[KeyType]>
 }

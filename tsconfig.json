@@ -1,16 +1,23 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2018",
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
+    "target": "es2022",
+    "lib": ["es2022", "DOM"],
+
     "allowJs": true,
     "checkJs": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "typeRoots": ["types", "node_modules/@types"]
+    "module": "NodeNext",
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true,
+    "rootDir": "."
   },
-  "files": ["index.js"]
+  "include": ["**/*"],
+  "exclude": ["node_modules"]
 }
