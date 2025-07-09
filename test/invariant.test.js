@@ -1,5 +1,5 @@
 import test from 'tape'
-import { invariant } from '../lib/invariant.js'
+import { invariant } from '../lib/utils.js'
 
 test('invariant', (t) => {
   t.throws(() => invariant(false), 'Throws when condition is false')
