@@ -10,6 +10,7 @@ import { MessagePortPair, ReadableError } from './helpers.js'
 import ensureError from 'ensure-error'
 import { fileURLToPath } from 'url'
 import path from 'path'
+import { pino } from 'pino'
 
 /**
  * @template {{}} ApiType
@@ -101,10 +102,23 @@ const myApi = {
 // @ts-ignore
 runTests(function setup(api, opts) {
   const { port1: serverMPort, port2: clientMPort } = new MessagePortPair()
-
+  /** @type {Exclude<Parameters<typeof createClient>[1], undefined>['logger']} */
+  let logger = false
+  if (process.env.DEBUG) {
+    logger = pino({
+      level: 'debug',
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          ignore: 'pid,hostname',
+        },
+      },
+    })
+  }
   return {
-    client: createClient(clientMPort, opts),
-    server: createServer(api, serverMPort),
+    client: createClient(clientMPort, { logger, ...opts }),
+    server: createServer(api, serverMPort, { logger }),
     clientMPort,
     serverMPort,
   }
