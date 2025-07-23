@@ -1,6 +1,7 @@
 export default [
   Buffer.from('hello'),
   Uint8Array.from([1, 2]),
+  [],
   [0],
   [0, 'stringID'],
   [0, 7, 'stringMethodName'],
@@ -50,4 +51,5 @@ export const invalidMetadata = [
   { foo: [] },
   { foo: [1, 2] },
   { foo: ['string'] },
+  { [Symbol('foo')]: 'bar' },
 ]
