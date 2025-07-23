@@ -11,11 +11,10 @@ export interface test {
 export type NonEmptyArray<T> = [T, ...T[]]
 
 export type MsgId = number
-type Prop = string
+export type Prop = string
 type EventName = string
-type Args = Array<any>
+export type Args = Array<any>
 type Params = Array<any>
-type Result = any
 type More = boolean
 type IsObjectMode = boolean
 
@@ -30,7 +29,7 @@ type MsgResponseEnd = [
   typeof msgType.RESPONSE,
   MsgId,
   ErrorObject | null,
-  Result,
+  any,
   false, // More data to come?
   IsObjectMode, // Last message in streaming response indicates if was objectMode
 ]
@@ -38,10 +37,11 @@ export type MsgResponse =
   | [
       typeof msgType.RESPONSE,
       MsgId, // messageId
-      ErrorObject | null, // error
-      Result?, // result
+      null, // error
+      any, // result
       More?, // more data to come?
     ]
+  | [typeof msgType.RESPONSE, MsgId, ErrorObject]
   | MsgResponseEnd
 export type MsgOn = [typeof msgType.ON, EventName, Array<Prop>]
 export type MsgOff = [typeof msgType.OFF, EventName, Array<Prop>]
@@ -53,6 +53,11 @@ export type MsgEmit = [
   Params?,
 ]
 export type Message = MsgRequest | MsgResponse | MsgOn | MsgOff | MsgEmit
+
+export type MessageContainer = {
+  value: Message
+  metadata?: Record<string, string>
+}
 
 export type SubClient = ((...args: any[]) => Promise<any>) & Client
 
@@ -106,3 +111,12 @@ export type ClientApi<ServerApi extends {}> = {
             ? never
             : () => Promise<ServerApi[KeyType]>
 }
+
+export type Metadata = Record<string, string>
+export type MsgRequestObj = {
+  msgId: MsgId
+  method: NonEmptyArray<Prop>
+  args: Args
+  metadata?: Metadata
+}
+export type Result = Promise<any> | Readable
