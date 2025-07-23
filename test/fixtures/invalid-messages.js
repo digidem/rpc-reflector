@@ -30,3 +30,24 @@ export default [
   {},
   false,
 ]
+
+export const invalidMetadata = [
+  null,
+  undefined,
+  1,
+  'string',
+  true,
+  [],
+  [1, 2],
+  [1, 'string'],
+  { foo: 1 },
+  { foo: 'bar', baz: 2 },
+  { nested: { object: 'not allowed' } },
+  { foo: null },
+  { foo: undefined },
+  { foo: true },
+  { foo: false },
+  { foo: [] },
+  { foo: [1, 2] },
+  { foo: ['string'] },
+]

@@ -37,6 +37,7 @@
     "abstract-logging": "^2.0.1",
     "ensure-error": "^4.0.0",
     "eventemitter3": "^5.0.1",
+    "is-plain-obj": "^4.1.0",
     "is-stream": "^4.0.1",
     "p-defer": "^4.0.1",
     "p-timeout": "^6.1.4",
