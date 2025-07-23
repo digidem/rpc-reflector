@@ -11,6 +11,7 @@ import ensureError from 'ensure-error'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import { pino } from 'pino'
+import { isReadableStream } from 'is-stream'
 
 /**
  * @template {{}} ApiType
@@ -96,11 +97,17 @@ const myApi = {
   createObjectStream(o) {
     return intoStream.object(o)
   },
+  async promiseReturningStream() {
+    return createReadStream(fixturePath, {
+      highWaterMark: 10,
+      encoding: 'utf8',
+    })
+  },
 }
 
 // Run tests with MessagePort
 // @ts-ignore
-runTests(function setup(api, opts) {
+runTests(function setup(api, clientOpts, serverOpts) {
   const { port1: serverMPort, port2: clientMPort } = new MessagePortPair()
   /** @type {Exclude<Parameters<typeof createClient>[1], undefined>['logger']} */
   let logger = false
@@ -117,15 +124,15 @@ runTests(function setup(api, opts) {
     })
   }
   return {
-    client: createClient(clientMPort, { logger, ...opts }),
-    server: createServer(api, serverMPort, { logger }),
+    client: createClient(clientMPort, { logger, ...clientOpts }),
+    server: createServer(api, serverMPort, { logger, ...serverOpts }),
     clientMPort,
     serverMPort,
   }
 })
 
 /**
- * @typedef {<T extends {}>(api: T, opts?: Parameters<typeof createClient>[1]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
+ * @typedef {<T extends {}>(api: T, clientOpts?: Parameters<typeof createClient>[1], serverOpts?: Parameters<typeof createServer>[2]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
  */
 
 /**
@@ -155,13 +162,18 @@ function runTests(setup) {
 
   test('Calls methods on server', async (t) => {
     const { client } = setup(myApi)
-    t.plan(9)
+    t.plan(10)
     t.equal(await client.add(1, 2), 3, 'Sync method works')
     t.equal(await client.getLlama(), 'llama', 'Async method works')
     t.equal(
       await client.createStringStream(),
       fixtureBuf.toString(),
       'Readable stream as string works',
+    )
+    t.equal(
+      await client.promiseReturningStream(),
+      fixtureBuf.toString(),
+      'Promise returning readable stream as string works',
     )
     t.ok(
       fixtureBuf.equals(
@@ -603,5 +615,144 @@ function runTests(setup) {
     t.is(await client.deep, client.deep)
     t.is(await client.deep.nested, client.deep.nested)
     t.end()
+  })
+
+  test('Client onRequestHook', async (t) => {
+    const { client } = setup(myApi, {
+      onRequestHook: async (request, next) => {
+        t.deepEqual(
+          request.method,
+          ['add'],
+          'onRequestHook called with correct method',
+        )
+        t.deepEqual(
+          request.args,
+          [1, 2],
+          'onRequestHook called with correct args',
+        )
+        const result = next(request)
+        t.equal(await result, 3, 'onRequestHook returns correct result')
+      },
+    })
+    t.plan(4)
+    t.equal(await client.add(1, 2), 3, 'Sync method works')
+  })
+
+  test('Server onRequestHook', async (t) => {
+    const { client, server } = setup(myApi, undefined, {
+      onRequestHook: async (request, next) => {
+        t.deepEqual(
+          request.method,
+          ['add'],
+          'onRequestHook called with correct method',
+        )
+        t.deepEqual(
+          request.args,
+          [1, 2],
+          'onRequestHook called with correct args',
+        )
+        const result = next(request)
+        t.equal(await result, 3, 'onRequestHook returns correct result')
+      },
+    })
+    t.plan(4)
+    t.equal(await client.add(1, 2), 3, 'Sync method works')
+    server.close()
+  })
+
+  test('Server onRequestHook - stream result', async (t) => {
+    const { client, server } = setup(myApi, undefined, {
+      onRequestHook: async (request, next) => {
+        t.deepEqual(
+          request.method,
+          ['createStringStream'],
+          'onRequestHook called with correct method',
+        )
+        t.deepEqual(request.args, [], 'onRequestHook called with correct args')
+        const result = next(request)
+        t.ok(isReadableStream(result), 'onRequestHook returns stream')
+      },
+    })
+    t.plan(4)
+    t.equal(
+      await client.createStringStream(),
+      fixtureBuf.toString(),
+      'Sync method works',
+    )
+    server.close()
+  })
+
+  test('Passing metadata with onRequestHooks', async (t) => {
+    const { client } = setup(
+      myApi,
+      {
+        onRequestHook: async (request, next) => {
+          return next({
+            ...request,
+            metadata: { foo: 'bar' },
+          })
+        },
+      },
+      {
+        onRequestHook: async (request, next) => {
+          t.deepEqual(
+            request.metadata,
+            { foo: 'bar' },
+            'onRequestHook called with correct metadata',
+          )
+          return next(request)
+        },
+      },
+    )
+    t.plan(2)
+    const result = await client.add(1, 2)
+    t.equal(result, 3, 'Expected result from add method')
+  })
+
+  test('Invalid metadata is ignored', async (t) => {
+    const { client } = setup(
+      myApi,
+      {
+        onRequestHook: async (request, next) => {
+          return next({
+            ...request,
+            // @ts-expect-error
+            metadata: { foo: 'bar', baz: 42 }, // Invalid metadata
+          })
+        },
+      },
+      {
+        onRequestHook: async (request, next) => {
+          t.equal(request.metadata, undefined, 'invalid metadata is ignored')
+          return next(request)
+        },
+      },
+    )
+    t.plan(2)
+    try {
+      await client.add(1, 2)
+      t.pass('Invalid metadata does not throw')
+    } catch {
+      t.fail('Invalid metadata should not throw')
+    }
+  })
+
+  test('Error in onRequestHook is ignored', async (t) => {
+    const { client } = setup(
+      myApi,
+      {
+        onRequestHook: () => {
+          throw new Error('Test error in onRequestHook')
+        },
+      },
+      {
+        onRequestHook: () => {
+          throw new Error('Test error in onRequestHook')
+        },
+      },
+    )
+    t.plan(1)
+    const result = await client.add(1, 2)
+    t.equal(result, 3, 'Expected result from add method')
   })
 }

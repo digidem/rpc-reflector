@@ -1,6 +1,7 @@
 export default [
   Buffer.from('hello'),
   Uint8Array.from([1, 2]),
+  [],
   [0],
   [0, 'stringID'],
   [0, 7, 'stringMethodName'],
@@ -29,4 +30,26 @@ export default [
   1,
   {},
   false,
+]
+
+export const invalidMetadata = [
+  null,
+  undefined,
+  1,
+  'string',
+  true,
+  [],
+  [1, 2],
+  [1, 'string'],
+  { foo: 1 },
+  { foo: 'bar', baz: 2 },
+  { nested: { object: 'not allowed' } },
+  { foo: null },
+  { foo: undefined },
+  { foo: true },
+  { foo: false },
+  { foo: [] },
+  { foo: [1, 2] },
+  { foo: ['string'] },
+  { [Symbol('foo')]: 'bar' },
 ]
