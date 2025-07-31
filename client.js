@@ -1,29 +1,29 @@
 import { EventEmitter } from 'eventemitter3'
-import { ExhaustivenessError, invariant } from './utils.js'
+import { ExhaustivenessError, invariant } from './lib/utils.js'
 import { deserializeError } from 'serialize-error'
 import promiseTimeout from 'p-timeout'
 
-import { isMessagePortLike } from './is-message-port-like.js'
-import { msgType } from './constants.js'
-import { stringify, parse } from './prop-array-utils.js'
-import { validateResponseMsg } from './validate-message.js'
+import { isMessagePortLike } from './lib/is-message-port-like.js'
+import { msgType } from './lib/constants.js'
+import { stringify, parse } from './lib/prop-array-utils.js'
+import { validateResponseMsg } from './lib/validate-message.js'
 import nullLogger from 'abstract-logging'
 import pDefer from 'p-defer'
 
-/** @import {MessageContainer, MsgRequestObj} from './types.js' */
-/** @typedef {import('./types.js').MsgRequest} MsgRequest */
-/** @typedef {import('./types.js').MsgResponse} MsgResponse */
-/** @typedef {import('./types.js').MsgOn} MsgOn */
-/** @typedef {import('./types.js').MsgOff} MsgOff */
-/** @typedef {import('./types.js').MsgEmit} MsgEmit */
-/** @typedef {import('./types.js').Message} Message */
-/** @typedef {import('./types.js').Client} Client */
-/** @typedef {import('./types.js').SubClient} SubClient */
+/** @import {MessageContainer, MsgRequestObj} from './lib/types.js' */
+/** @typedef {import('./lib/types.js').MsgRequest} MsgRequest */
+/** @typedef {import('./lib/types.js').MsgResponse} MsgResponse */
+/** @typedef {import('./lib/types.js').MsgOn} MsgOn */
+/** @typedef {import('./lib/types.js').MsgOff} MsgOff */
+/** @typedef {import('./lib/types.js').MsgEmit} MsgEmit */
+/** @typedef {import('./lib/types.js').Message} Message */
+/** @typedef {import('./lib/types.js').Client} Client */
+/** @typedef {import('./lib/types.js').SubClient} SubClient */
 /**
  * @template {{}} ApiType
- * @typedef {import('./types.js').ClientApi<ApiType>} ClientApi
+ * @typedef {import('./lib/types.js').ClientApi<ApiType>} ClientApi
  */
-/** @typedef {import('./types.js').MessagePortLike} MessagePortLike */
+/** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('worker_threads').MessagePort} MessagePortNode */
 
 const emitterSubscribeMethods = [
@@ -363,7 +363,7 @@ function concatStreamedResponse(streamedResponse) {
 
 /**
  * @param {string[]} arr
- * @returns {arr is import('./types.js').NonEmptyArray<string>}
+ * @returns {arr is import('./lib/types.js').NonEmptyArray<string>}
  */
 function isNonEmptyStringArray(arr) {
   return arr.length > 0

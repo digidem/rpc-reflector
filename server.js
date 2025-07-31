@@ -1,24 +1,24 @@
-import { ExhaustivenessError, invariant } from './utils.js'
+import { ExhaustivenessError, invariant } from './lib/utils.js'
 import { serializeError } from 'serialize-error'
 import nullLogger from 'abstract-logging'
 import { isDuplexStream, isReadableStream } from 'is-stream'
-import { msgType } from './constants.js'
-import { validateMetadata, validateRequestMsg } from './validate-message.js'
-import { parse, stringify } from './prop-array-utils.js'
-import { MessageStream } from './message-stream.js'
-import { isMessagePortLike } from './is-message-port-like.js'
+import { msgType } from './lib/constants.js'
+import { validateMetadata, validateRequestMsg } from './lib/validate-message.js'
+import { parse, stringify } from './lib/prop-array-utils.js'
+import { MessageStream } from './lib/message-stream.js'
+import { isMessagePortLike } from './lib/is-message-port-like.js'
 import { EventEmitter } from 'events'
 import ensureError from 'ensure-error'
 
-/** @import {MsgRequestObj, Result, Metadata, MsgId} from './types.js'*/
-/** @typedef {import('./types.js').MsgRequest} MsgRequest */
-/** @typedef {import('./types.js').MsgResponse} MsgResponse */
-/** @typedef {import('./types.js').MsgOn} MsgOn */
-/** @typedef {import('./types.js').MsgOff} MsgOff */
-/** @typedef {import('./types.js').MsgEmit} MsgEmit */
-/** @typedef {import('./types.js').Message} Message */
-/** @typedef {import('./types.js').NonEmptyArray<string>} NonEmptyStringArray */
-/** @typedef {import('./types.js').MessagePortLike} MessagePortLike */
+/** @import {MsgRequestObj, Result, Metadata, MsgId} from './lib/types.js'*/
+/** @typedef {import('./lib/types.js').MsgRequest} MsgRequest */
+/** @typedef {import('./lib/types.js').MsgResponse} MsgResponse */
+/** @typedef {import('./lib/types.js').MsgOn} MsgOn */
+/** @typedef {import('./lib/types.js').MsgOff} MsgOff */
+/** @typedef {import('./lib/types.js').MsgEmit} MsgEmit */
+/** @typedef {import('./lib/types.js').Message} Message */
+/** @typedef {import('./lib/types.js').NonEmptyArray<string>} NonEmptyStringArray */
+/** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('worker_threads').MessagePort} MessagePortNode */
 
 /**
