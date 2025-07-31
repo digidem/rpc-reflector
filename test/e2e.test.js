@@ -638,7 +638,7 @@ function runTests(setup) {
     t.equal(await client.add(1, 2), 3, 'Sync method works')
   })
 
-  test.only('Client onRequestHook - methods throw in hook', async (t) => {
+  test('Client onRequestHook - methods throw in hook', async (t) => {
     const { client } = setup(myApi, {
       onRequestHook: async (request, next) => {
         const result = next(request)
