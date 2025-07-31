@@ -64,7 +64,7 @@ const myApiOnClient =
 
 ## API
 
-### `const { close } = createServer(api, channel)`
+### `const { close } = createServer(api, channel, [options])`
 
 `api` can be any object with any properties, methods and events that you want reflected in the client API.
 
@@ -72,11 +72,22 @@ const myApiOnClient =
 
 If `channel` is a MessagePort you will need to manually call [`port.start()`](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort/start) to start sending messages queued in the port.
 
+`options`: an optional object with the following properties:
+
+- `logger`: An instance of Pino Logger or a compatible logger. If not provided, no logging will be done.
+- `onRequestHook: (request: MsgRequestObj, next: (request: MsgRequestObj) => Promise<any>) => void` Optional hook to observe and modify a request and its metadata, and to await the response.
+
 `close()` is used to remove event listeners from the channel. It will not close or destroy the MessagePort used as the `channel`.
 
-### `const clientApi = createClient(channel)`
+### `const clientApi = createClient(channel, [options])`
 
 `channel`: see above for `createServer()`
+
+`options`: an optional object with the following properties:
+
+- `logger`: An instance of Pino Logger or a compatible logger. If not provided, no logging will be done.
+- `onRequestHook: (request: Omit<MsgRequestObj, 'metadata'>, next: (request: MsgRequestObj) => Promise<any>) => void` Optional hook to observe and modify a request and its metadata, and to await the response.
+- `timeout`: Optional timeout in milliseconds for requests. Default `5000`ms. Note that any code that takes longer than timeout will also trigger it. Use it with caution to catch timeouts in your message channel if you know your API methods will not take longer than the timeout to respond.
 
 Returns `clientApi` which can be called with any method on the `api` passed to `createServer()`. Events on `api` can be subscribed to via `clientApi.on(eventName, handler)` on the client. Properties/fields on the server `api` can be access by calling a method with the same name on the client API, e.g. to access the property `api.myProp`, on the client call `await clientApi.myProp()`.
 
