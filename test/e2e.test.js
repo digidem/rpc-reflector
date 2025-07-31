@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import { pino } from 'pino'
 import { isReadableStream } from 'is-stream'
+import nullLogger from 'abstract-logging'
 
 /**
  * @template {{}} ApiType
@@ -763,20 +764,40 @@ function runTests(setup) {
   })
 
   test('Error in onRequestHook is ignored', async (t) => {
+    const clientHookError = new Error('Test error in client onRequestHook')
+    const serverHookError = new Error('Test error in server onRequestHook')
+    const clientLogger = {
+      ...nullLogger,
+      // @ts-ignore
+      error(obj) {
+        t.equal(obj.err, clientHookError, 'Client hook error logged')
+      },
+    }
+
+    const serverLogger = {
+      ...nullLogger,
+      // @ts-ignore
+      error(obj) {
+        t.equal(obj.err, serverHookError, 'Server hook error logged')
+      },
+    }
+
     const { client } = setup(
       myApi,
       {
+        logger: clientLogger,
         onRequestHook: () => {
-          throw new Error('Test error in onRequestHook')
+          throw clientHookError
         },
       },
       {
+        logger: serverLogger,
         onRequestHook: () => {
-          throw new Error('Test error in onRequestHook')
+          throw serverHookError
         },
       },
     )
-    t.plan(1)
+    t.plan(3)
     const result = await client.add(1, 2)
     t.equal(result, 3, 'Expected result from add method')
   })
