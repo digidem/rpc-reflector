@@ -3,5 +3,5 @@
  * @typedef {import('./lib/types.js').ClientApi<ApiType>} ClientApi
  */
 
-export { createClient } from './lib/client.js'
-export { createServer } from './lib/server.js'
+export { createClient } from './client.js'
+export { createServer } from './server.js'
