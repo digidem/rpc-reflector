@@ -638,6 +638,31 @@ function runTests(setup) {
     t.equal(await client.add(1, 2), 3, 'Sync method works')
   })
 
+  test.only('Client onRequestHook - methods throw in hook', async (t) => {
+    const { client } = setup(myApi, {
+      onRequestHook: async (request, next) => {
+        const result = next(request)
+        try {
+          await result
+          t.fail('onRequestHook should not return a result')
+        } catch (/** @type {any} */ err) {
+          t.equal(
+            err.message,
+            'TestError',
+            'Error in promise returned from next() is not swallowed',
+          )
+        }
+      },
+    })
+    t.plan(2)
+    try {
+      await client.errorMethod()
+      t.fail('Should not reach here')
+    } catch (/** @type {any} */ err) {
+      t.equal(err.message, 'TestError', 'Error in method is thrown')
+    }
+  })
+
   test('Server onRequestHook', async (t) => {
     const { client, server } = setup(myApi, undefined, {
       onRequestHook: async (request, next) => {
