@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.0-prerelease.0](https://github.com/gmaclennan/rpc-reflector/compare/v2.0.0...v3.0.0-prerelease.0) (2025-08-01)
+
+### ⚠ BREAKING CHANGES
+
+- Publishing fixes (#26)
+
+### Features
+
+- add logger option ([#24](https://github.com/gmaclennan/rpc-reflector/issues/24)) ([acb36d9](https://github.com/gmaclennan/rpc-reflector/commit/acb36d9ece506609e31b29744a1365a4d9742119))
+- add onRequestHook option ([#25](https://github.com/gmaclennan/rpc-reflector/issues/25)) ([8215adb](https://github.com/gmaclennan/rpc-reflector/commit/8215adb0bb47a346c0ce31f7d0ab3dce3af8286b))
+
+- Publishing fixes ([#26](https://github.com/gmaclennan/rpc-reflector/issues/26)) ([37f6a11](https://github.com/gmaclennan/rpc-reflector/commit/37f6a11e4b478692e66b512de559db693b3c21e9))
+
 ## [2.0.0](https://github.com/gmaclennan/rpc-reflector/compare/v1.3.11...v2.0.0) (2025-07-08)
 
 ### ⚠ BREAKING CHANGES
