@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [3.0.0](https://github.com/gmaclennan/rpc-reflector/compare/v3.0.0-prerelease.0...v3.0.0) (2025-08-04)
+
 ## [3.0.0-prerelease.0](https://github.com/gmaclennan/rpc-reflector/compare/v2.0.0...v3.0.0-prerelease.0) (2025-08-01)
 
 ### ⚠ BREAKING CHANGES
