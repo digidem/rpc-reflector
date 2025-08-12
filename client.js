@@ -240,7 +240,7 @@ export function createClient(
         //   return () => '[rpcProxyClient]'
         // }
         if (typeof prop !== 'string') {
-          throw new Error(`ReferenceError: ${String(prop)} is not defined`)
+          return undefined
         } else if (prop === 'then') {
           return null
         } else if (prop in EventEmitter.prototype) {
