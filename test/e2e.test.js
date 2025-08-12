@@ -591,6 +591,17 @@ function runTests(setup) {
     t.end()
   })
 
+  test('Accessing a symbol property returns undefined', (t) => {
+    const { client } = setup(myApi)
+    t.equal(
+      // @ts-expect-error
+      client[Symbol('test')],
+      undefined,
+      'Symbol property returns undefined',
+    )
+    t.end()
+  })
+
   test('console.log on client does not throw', (t) => {
     const { client } = setup(myApi)
     // This was throwing without a trap for util.inspect.custom
