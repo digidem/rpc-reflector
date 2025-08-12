@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [3.0.1](https://github.com/gmaclennan/rpc-reflector/compare/v3.0.0...v3.0.1) (2025-08-12)
+
+### Bug Fixes
+
+- Trying to access a symbol prop should return undefined ([#27](https://github.com/gmaclennan/rpc-reflector/issues/27)) ([d0e85d2](https://github.com/gmaclennan/rpc-reflector/commit/d0e85d2bf87e0448d5684c1d537d2603404714ad))
+
 ## [3.0.0](https://github.com/gmaclennan/rpc-reflector/compare/v3.0.0-prerelease.0...v3.0.0) (2025-08-04)
 
 ## [3.0.0-prerelease.0](https://github.com/gmaclennan/rpc-reflector/compare/v2.0.0...v3.0.0-prerelease.0) (2025-08-01)
