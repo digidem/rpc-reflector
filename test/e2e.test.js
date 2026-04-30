@@ -104,6 +104,9 @@ const myApi = {
       encoding: 'utf8',
     })
   },
+  slowMethod() {
+    return new Promise(() => {})
+  },
 }
 
 // Run tests with MessagePort
@@ -576,9 +579,30 @@ function runTests(setup) {
     try {
       await client.add(1, 2)
     } catch (err) {
-      t.ok(
-        /timed out/.test(ensureError(err).message),
-        'Should fail with timeout',
+      t.equal(
+        ensureError(err).message,
+        'Channel closed',
+        'Should fail with "Channel closed"',
+      )
+    }
+    t.end()
+  })
+
+  test('Closing the client rejects in-flight requests with "Channel closed"', async (t) => {
+    const { client } = setup(myApi, { timeout: 5000 })
+    const inFlight = client.slowMethod()
+    createClient.close(client)
+    const guard = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('test guard timed out')), 500),
+    )
+    try {
+      await Promise.race([inFlight, guard])
+      t.fail('Expected rejection')
+    } catch (err) {
+      t.equal(
+        ensureError(err).message,
+        'Channel closed',
+        'In-flight request rejects fast with "Channel closed"',
       )
     }
     t.end()
