@@ -64,6 +64,7 @@ export function createClient(
   /** @type {Map<number, Array<any>>} */
   const collector = new Map() // Streaming responses pending return
   const emitter = new EventEmitter()
+  let closed = false
 
   if ('on' in channel) {
     channel.on('message', handleMessage)
@@ -206,12 +207,21 @@ export function createClient(
   }
 
   function handleClose() {
+    if (closed) return
+    closed = true
     if ('off' in channel) {
       channel.off('message', handleMessage)
       /* c8 ignore next 3 - TODO: Add browser tests */
     } else {
       channel.removeEventListener('message', handleMessage)
     }
+    // Reject every in-flight RPC so callers don't have to wait for the
+    // per-call timeout to fire when the channel is torn down.
+    for (const [, [, reject]] of pending) {
+      reject(new Error('Channel closed'))
+    }
+    pending.clear()
+    collector.clear()
     // TODO: Should we do this? Or leave it to the user? It's considered "bad
     // practice" to do this
     emitter.removeAllListeners()
@@ -300,6 +310,9 @@ export function createClient(
         /* c8 ignore next 3 */
         if (!isNonEmptyStringArray(propArray)) {
           throw new TypeError('[target] is not a function')
+        }
+        if (closed) {
+          return Promise.reject(new Error('Channel closed'))
         }
         const msgId = id++
 

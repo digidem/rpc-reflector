@@ -576,9 +576,10 @@ function runTests(setup) {
     try {
       await client.add(1, 2)
     } catch (err) {
-      t.ok(
-        /timed out/.test(ensureError(err).message),
-        'Should fail with timeout',
+      t.equal(
+        ensureError(err).message,
+        'Channel closed',
+        'Should fail with "Channel closed"',
       )
     }
     t.end()
