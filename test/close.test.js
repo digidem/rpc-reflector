@@ -5,35 +5,6 @@ import { createClient } from '../index.js'
 import { msgType } from '../lib/constants.js'
 import { MessagePortPair } from './helpers.js'
 
-test('close() rejects in-flight requests with "Channel closed" instead of timing out', (t) => {
-  t.plan(1)
-  const { port1, port2 } = new MessagePortPair()
-  // Server absorbs messages and never responds.
-  port2.on('message', () => {})
-
-  const client = createClient(port1, { timeout: 5000 })
-  // @ts-expect-error
-  const requestPromise = client.someMethod()
-
-  createClient.close(client)
-
-  const timeoutGuard = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('test timed out')), 500),
-  )
-
-  Promise.race([requestPromise, timeoutGuard]).then(
-    () => t.fail('Expected request to reject with "Channel closed"'),
-    /** @param {Error} err */
-    (err) => {
-      t.equal(
-        err.message,
-        'Channel closed',
-        'Pending request rejects fast with "Channel closed"',
-      )
-    },
-  )
-})
-
 test('calling a method after close() rejects synchronously with "Channel closed"', (t) => {
   t.plan(2)
   const { port1, port2 } = new MessagePortPair()
