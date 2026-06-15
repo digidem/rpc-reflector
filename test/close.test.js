@@ -3,13 +3,13 @@ import test from 'tape'
 
 import { createClient } from '../index.js'
 import { msgType } from '../lib/constants.js'
-import { MessagePortPair } from './helpers.js'
+import { MessagePortLikePair } from './helpers.js'
 
 test('calling a method after close() rejects synchronously with "Channel closed"', (t) => {
   t.plan(2)
-  const { port1, port2 } = new MessagePortPair()
+  const { port1, port2 } = new MessagePortLikePair()
   let postCloseMessages = 0
-  port2.on('message', () => {
+  port2.addEventListener('message', () => {
     postCloseMessages++
   })
 
@@ -32,8 +32,8 @@ test('calling a method after close() rejects synchronously with "Channel closed"
 })
 
 test('close() is idempotent', (t) => {
-  const { port1, port2 } = new MessagePortPair()
-  port2.on('message', () => {})
+  const { port1, port2 } = new MessagePortLikePair()
+  port2.addEventListener('message', () => {})
 
   const client = createClient(port1, { timeout: 200 })
 
@@ -47,9 +47,11 @@ test('close() is idempotent', (t) => {
 
 test('close() also clears collector entries (no leaked half-streamed responses)', (t) => {
   t.plan(2)
-  const { port1, port2 } = new MessagePortPair()
+  const { port1, port2 } = new MessagePortLikePair()
 
-  port2.on('message', (msg) => {
+  port2.addEventListener('message', (event) => {
+    const msg = 'data' in event ? event.data : undefined
+    if (!Array.isArray(msg)) throw new Error('Expected message to be an array')
     if (msg[0] !== msgType.REQUEST) return
     // Begin a streaming response with `more=true` so the client's collector
     // map gets populated, but never send the final chunk.

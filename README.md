@@ -34,7 +34,6 @@ npm install rpc-reflector
 
 ```ts
 import { createClient, createServer } from 'rpc-reflector'
-import { MessagePortPair } from '../test/helpers.js'
 
 const myApi = {
   syncMethod: () => 'result1',
@@ -44,12 +43,12 @@ const myApi = {
     }),
 }
 
-const { port1: serverPort, port2: clientPort } = new MessagePortPair()
+const { port1: serverPort, port2: clientPort } = new MessageChannel()
 
-const { close } = createServer(myApi, serverPort)
+const server = createServer(myApi, serverPort)
 
 const myApiOnClient =
-  /** @type {import('../index.js').ClientApi<typeof myApi>} */ createClient(
+  /** @type {import('rpc-reflector').ClientApi<typeof myApi>} */ createClient(
     clientPort,
   )
 
@@ -58,7 +57,11 @@ const myApiOnClient =
   const result2 = await myApiOnClient.asyncMethod()
   console.log(result1) // 'result1'
   console.log(result2) // 'result2'
-  close()
+  // Tear down so the MessageChannel ports stop keeping the process alive.
+  createClient.close(myApiOnClient)
+  server.close()
+  serverPort.close()
+  clientPort.close()
 })()
 ```
 
@@ -68,7 +71,7 @@ const myApiOnClient =
 
 `api` can be any object with any properties, methods and events that you want reflected in the client API.
 
-`channel` can be a browser [MessagePort](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort), a Node [Worker MessagePort](https://nodejs.org/api/worker_threads.html#worker_threads_class_messageport) or a MessagePort-like object that defines a `postMessage()` method and implements an `EventEmitter` that emits an event named `'message'`.
+`channel` can be a browser [MessagePort](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort), a Node [Worker MessagePort](https://nodejs.org/api/worker_threads.html#worker_threads_class_messageport) or a MessagePort-like object that defines a `postMessage()` method and `addEventListener('message', ...)` / `removeEventListener('message', ...)` methods. The listener is called with a `MessageEvent`-like object, i.e. an object with the message on its `data` property.
 
 If `channel` is a MessagePort you will need to manually call [`port.start()`](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort/start) to start sending messages queued in the port.
 
@@ -101,7 +104,7 @@ The returned `clientApi` will be correctly typed, with synchronous functions con
 
 ### `createClient.close(clientApi)`
 
-The static method `close()` will remove all event listeners from the `channel` used to create the client. It will not close or destroy the MessagePort or Stream used as the `channel`.
+The static method `close()` will remove all event listeners from the `channel` used to create the client. It will not close or destroy the MessagePort used as the `channel`.
 
 ## Maintainers
 

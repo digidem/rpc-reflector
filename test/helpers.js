@@ -1,38 +1,58 @@
-import { EventEmitter } from 'events'
 import { Readable } from 'readable-stream'
 
-export class MessagePortLike extends EventEmitter {
+/** @import {MessagePortLike as MessagePortLikeInterface, MessageEvent} from '../lib/types.js' */
+
+/** @implements {MessagePortLikeInterface} */
+export class MessagePortLike {
+  #handler
+  /** @type {Map<string, Set<(event: MessageEvent<any>) => void>>} */
+  #listeners = new Map()
+
   /** @param {(data: any) => void} handler */
   constructor(handler) {
-    super()
-    this._handler = handler
+    this.#handler = handler
   }
+
+  /** @type {MessagePortLikeInterface['addEventListener']} */
+  addEventListener(type, listener) {
+    let listeners = this.#listeners.get(type)
+    if (!listeners) this.#listeners.set(type, (listeners = new Set()))
+    listeners.add(listener)
+  }
+
+  /** @type {MessagePortLikeInterface['removeEventListener']} */
+  removeEventListener(type, listener) {
+    if (listener) this.#listeners.get(type)?.delete(listener)
+  }
+
+  /** @param {string} type */
+  listenerCount(type) {
+    return this.#listeners.get(type)?.size ?? 0
+  }
+
   /** @param {any} data */
   postMessage(data) {
-    this._handler(data)
+    this.#handler(data)
+  }
+
+  /** @param {MessageEvent & { type: string }} event */
+  dispatchEvent(event) {
+    const listeners = this.#listeners.get(event.type)
+    if (!listeners)
+      throw new Error(`No listeners for event type "${event.type}"`)
+    for (const listener of listeners) {
+      listener.call(this, event)
+    }
   }
 }
 
-export class MessagePortPair {
+export class MessagePortLikePair {
   constructor() {
-    /** @type {MessagePortLike} */
-    this.port1 = new MessagePortLike((data) => this.port2.emit('message', data))
-    /** @type {MessagePortLike} */
-    this.port2 = new MessagePortLike((data) => this.port1.emit('message', data))
-  }
-}
-
-// Simulates a browser / Electron `MessagePort`, which delivers messages wrapped
-// in a `MessageEvent` whose payload is in `.data` (rather than the raw payload).
-export class MessageEventPortPair {
-  constructor() {
-    /** @type {MessagePortLike} */
     this.port1 = new MessagePortLike((data) =>
-      this.port2.emit('message', { data }),
+      this.port2.dispatchEvent(new MessageEvent('message', { data })),
     )
-    /** @type {MessagePortLike} */
     this.port2 = new MessagePortLike((data) =>
-      this.port1.emit('message', { data }),
+      this.port1.dispatchEvent(new MessageEvent('message', { data })),
     )
   }
 }

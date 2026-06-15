@@ -67,9 +67,28 @@ interface AnyMethod {
 
 export type Client = AnyMethod & EventEmitter
 
+/**
+ * A loosely typed interface for MessageEvent-like objects that have a `data`
+ * property. Only defines the interface that RPC Reflector actually uses.
+ */
+export interface MessageEvent<T = any> {
+  data: T
+}
+
+/**
+ * A loosely typed interface for a MessagePort-like object that has
+ * `addEventListener`, `removeEventListener`, and `postMessage` methods. Only
+ * defines the interface that RPC Reflector actually uses.
+ */
 export interface MessagePortLike {
-  on(event: 'message', listener: (value: any) => void): this
-  off(event: 'message', listener: (value: any) => void): this
+  addEventListener(
+    type: 'message',
+    listener: (event: MessageEvent<any>) => void,
+  ): void
+  removeEventListener(
+    type: 'message',
+    listener: (event: MessageEvent<any>) => void,
+  ): void
   postMessage(value: any): void
 }
 
