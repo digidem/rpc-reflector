@@ -7,6 +7,7 @@ import { validateMetadata, validateRequestMsg } from './lib/validate-message.js'
 import { parse, stringify } from './lib/prop-array-utils.js'
 import { MessageStream } from './lib/message-stream.js'
 import { isMessagePortLike } from './lib/is-message-port-like.js'
+import { unwrapMessageEvent } from './lib/unwrap-message-event.js'
 import { EventEmitter } from 'events'
 import ensureError from 'ensure-error'
 
@@ -83,17 +84,9 @@ export function createServer(
     /** @type {Metadata | undefined} */
     let metadata
 
-    // When using a MessagePort in a browser or electron environment, the
-    // actual data is in `event.data`
-    /* c8 ignore start - TODO: Add browser tests */
-    if (
-      typeof messageContainer === 'object' &&
-      messageContainer &&
-      'data' in messageContainer
-    ) {
-      messageContainer = messageContainer.data
-    }
-    /* c8 ignore stop */
+    // Browser/Electron MessagePorts wrap the message in a MessageEvent (`.data`);
+    // other transports deliver it directly. See `unwrapMessageEvent`.
+    messageContainer = unwrapMessageEvent(messageContainer)
 
     // If the message is a MessageContainer, we extract the value and metadata
     if (Array.isArray(messageContainer)) {

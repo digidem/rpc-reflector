@@ -4,6 +4,7 @@ import { deserializeError } from 'serialize-error'
 import promiseTimeout from 'p-timeout'
 
 import { isMessagePortLike } from './lib/is-message-port-like.js'
+import { unwrapMessageEvent } from './lib/unwrap-message-event.js'
 import { msgType } from './lib/constants.js'
 import { stringify, parse } from './lib/prop-array-utils.js'
 import { validateResponseMsg } from './lib/validate-message.js'
@@ -119,12 +120,9 @@ export function createClient(
    * types that we understand, other messages are ignored
    */
   function handleMessage(msg) {
-    // When using a MessagePort in a browser or electron environment, the
-    // actual data is in `event.data`
-    /* c8 ignore next 3 - TODO: Add browser tests */
-    if (typeof msg === 'object' && msg && 'data' in msg) {
-      msg = msg.data
-    }
+    // Browser/Electron MessagePorts wrap the message in a MessageEvent (`.data`);
+    // other transports deliver it directly. See `unwrapMessageEvent`.
+    msg = unwrapMessageEvent(msg)
     try {
       validateResponseMsg(msg)
     } catch (err) {

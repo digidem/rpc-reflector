@@ -22,6 +22,21 @@ export class MessagePortPair {
   }
 }
 
+// Simulates a browser / Electron `MessagePort`, which delivers messages wrapped
+// in a `MessageEvent` whose payload is in `.data` (rather than the raw payload).
+export class MessageEventPortPair {
+  constructor() {
+    /** @type {MessagePortLike} */
+    this.port1 = new MessagePortLike((data) =>
+      this.port2.emit('message', { data }),
+    )
+    /** @type {MessagePortLike} */
+    this.port2 = new MessagePortLike((data) =>
+      this.port1.emit('message', { data }),
+    )
+  }
+}
+
 export class ReadableError extends Readable {
   /** @param {Error} err */
   constructor(err) {

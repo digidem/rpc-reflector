@@ -6,7 +6,11 @@ import { EventEmitter as EventEmitter3 } from 'eventemitter3'
 import { readFileSync, createReadStream } from 'fs'
 import { join } from 'path'
 import intoStream from 'into-stream'
-import { MessagePortPair, ReadableError } from './helpers.js'
+import {
+  MessagePortPair,
+  MessageEventPortPair,
+  ReadableError,
+} from './helpers.js'
 import ensureError from 'ensure-error'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -36,6 +40,10 @@ const myApi = {
    */
   add(a, b) {
     return a + b
+  },
+  /** @param {any} value */
+  echo(value) {
+    return value
   },
   prop: 'foo',
   objectProp: {
@@ -135,6 +143,19 @@ runTests(function setup(api, clientOpts, serverOpts) {
   }
 })
 
+// Run the same suite over a transport that wraps messages in a MessageEvent
+// (`.data`), as browser and Electron MessagePorts do.
+// @ts-ignore
+runTests(function setup(api, clientOpts, serverOpts) {
+  const { port1: serverMPort, port2: clientMPort } = new MessageEventPortPair()
+  return {
+    client: createClient(clientMPort, { ...clientOpts }),
+    server: createServer(api, serverMPort, { ...serverOpts }),
+    clientMPort,
+    serverMPort,
+  }
+})
+
 /**
  * @typedef {<T extends {}>(api: T, clientOpts?: Parameters<typeof createClient>[1], serverOpts?: Parameters<typeof createServer>[2]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
  */
@@ -161,6 +182,29 @@ function runTests(setup) {
     t.throws(() => createClient(null), 'Throws for null')
     // @ts-expect-error
     t.throws(() => createClient(1), 'Throws for non-object')
+    t.end()
+  })
+
+  test('Payloads containing `data`/`value` keys round-trip intact', async (t) => {
+    const { client } = setup(myApi)
+    // These keys collide with the transport envelope (`data`) and the metadata
+    // container (`value`); they must survive because payloads always travel
+    // nested inside the message, never as the top-level transport value.
+    const payload = {
+      data: 'should-not-be-unwrapped',
+      value: 42,
+      nested: { data: [1, 2, 3], value: { deep: true } },
+    }
+    t.deepEqual(
+      await client.echo(payload),
+      payload,
+      'object with `data` and `value` keys is returned unchanged',
+    )
+    t.deepEqual(
+      await client.echo({ data: { value: 'x' } }),
+      { data: { value: 'x' } },
+      'object that looks exactly like a wrapped container is returned unchanged',
+    )
     t.end()
   })
 
