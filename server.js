@@ -216,7 +216,6 @@ export function createServer(
 
     /** @type {(...args: any[]) => void} */
     const listener = (...args) => {
-      log.debug({ eventName, propArray, args }, 'Emitting event to client')
       if (args.length === 1 && args[0] instanceof Error) {
         send([msgType.EMIT, eventName, propArray, serializeError(args[0])])
       } else {
@@ -225,7 +224,6 @@ export function createServer(
     }
     subscriptions.set(encodedEventName, listener)
     emitter.on(eventName, listener)
-    log.debug({ eventName, propArray, emitter }, 'Subscribed to event')
   }
 
   /** @param {MsgOff} msg */
