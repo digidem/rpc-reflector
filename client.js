@@ -25,6 +25,7 @@ import { isMessageEvent } from './lib/is-message-event.js'
  * @typedef {import('./lib/types.js').ClientApi<ApiType>} ClientApi
  */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
+/** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 
 const emitterSubscribeMethods = [
   'addListener',
