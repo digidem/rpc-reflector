@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [4.0.0-pre.0](https://github.com/gmaclennan/rpc-reflector/compare/v3.0.2...v4.0.0-pre.0) (2026-06-16)
+
+### ⚠ BREAKING CHANGES
+
+- createClient/createServer no longer accept Duplex
+  streams or EventEmitter-style (.on/.off) MessagePorts. Transports must
+  implement addEventListener/removeEventListener and deliver a
+  MessageEvent-like object. Node worker_threads MessagePorts work via
+  their EventTarget API.
+
+### Bug Fixes
+
+- discriminate MessageEvent unwrapping by message shape, not just `.data` ([dfdbfef](https://github.com/gmaclennan/rpc-reflector/commit/dfdbfef85a4adc065b2443b37dc718637a032487))
+
+- standardize on addEventListener MessagePort transport ([b9ba38b](https://github.com/gmaclennan/rpc-reflector/commit/b9ba38bbfdf36d9e5773a91ac03ad930fdbd9a43))
+
 ### [3.0.2](https://github.com/gmaclennan/rpc-reflector/compare/v3.0.1...v3.0.2) (2026-06-11)
 
 ### Bug Fixes
