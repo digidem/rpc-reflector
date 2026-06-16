@@ -71,7 +71,7 @@ export type Client = AnyMethod & EventEmitter
  * A loosely typed interface for MessageEvent-like objects that have a `data`
  * property. Only defines the interface that RPC Reflector actually uses.
  */
-export interface MessageEvent<T = any> {
+export interface MessageEvent<T = unknown> {
   data: T
 }
 
