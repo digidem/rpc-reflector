@@ -20,7 +20,7 @@ import { isMessageEvent } from './lib/is-message-event.js'
 /** @typedef {import('./lib/types.js').Message} Message */
 /** @typedef {import('./lib/types.js').NonEmptyArray<string>} NonEmptyStringArray */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
-
+/** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 /**
  * @public
  * Create an RPC server that will receive messages via `receiver`, call the
