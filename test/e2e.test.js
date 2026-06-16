@@ -14,6 +14,7 @@ import { pino } from 'pino'
 import { isReadableStream } from 'is-stream'
 import nullLogger from 'abstract-logging'
 
+/** @import {MessagePortLike} from '../index.js' */
 /**
  * @template {{}} ApiType
  * @typedef {import('../lib/types.js').ClientApi<ApiType>} ClientApi
@@ -129,11 +130,12 @@ function makeLogger() {
 }
 
 // Run tests with MessagePort
-// @ts-ignore
 runTests(function setup(t, api, clientOpts, serverOpts) {
   const { port1: serverMPort, port2: clientMPort } = new MessageChannel()
   const logger = makeLogger()
-  const client = createClient(clientMPort, { logger, ...clientOpts })
+  const client = /** @type {ClientApi<typeof api>} */ (
+    createClient(clientMPort, { logger, ...clientOpts })
+  )
   const server = createServer(api, serverMPort, { logger, ...serverOpts })
   // A real MessageChannel keeps the event loop alive while a port has an active
   // 'message' listener. Closing the client and server removes those listeners
@@ -149,11 +151,12 @@ runTests(function setup(t, api, clientOpts, serverOpts) {
 })
 
 // Run tests with MessagePort-like objects
-// @ts-ignore
 runTests(function setup(t, api, clientOpts, serverOpts) {
   const { port1: serverMPort, port2: clientMPort } = new MessagePortLikePair()
   const logger = makeLogger()
-  const client = createClient(clientMPort, { logger, ...clientOpts })
+  const client = /** @type {ClientApi<typeof api>} */ (
+    createClient(clientMPort, { logger, ...clientOpts })
+  )
   const server = createServer(api, serverMPort, { logger, ...serverOpts })
   // The fake doesn't hold the event loop open, but close the client and server
   // anyway to detach listeners and reject any in-flight requests.
@@ -165,7 +168,7 @@ runTests(function setup(t, api, clientOpts, serverOpts) {
 })
 
 /**
- * @typedef {<T extends {}>(t: import('tape').Test, api: T, clientOpts?: Parameters<typeof createClient>[1], serverOpts?: Parameters<typeof createServer>[2]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>, clientMPort: MessagePort, serverMPort: MessagePort }} SetupFunction
+ * @typedef {<T extends {}>(t: import('tape').Test, api: T, clientOpts?: Parameters<typeof createClient>[1], serverOpts?: Parameters<typeof createServer>[2]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>, clientMPort: MessagePortLike, serverMPort: MessagePortLike }} SetupFunction
  */
 
 /**
