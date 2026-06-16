@@ -6,7 +6,7 @@ import { EventEmitter as EventEmitter3 } from 'eventemitter3'
 import { readFileSync, createReadStream } from 'fs'
 import { join } from 'path'
 import intoStream from 'into-stream'
-import { MessagePortPair, ReadableError } from './helpers.js'
+import { MessagePortLikePair, ReadableError } from './helpers.js'
 import ensureError from 'ensure-error'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -14,6 +14,7 @@ import { pino } from 'pino'
 import { isReadableStream } from 'is-stream'
 import nullLogger from 'abstract-logging'
 
+/** @import {MessagePortLike} from '../index.js' */
 /**
  * @template {{}} ApiType
  * @typedef {import('../lib/types.js').ClientApi<ApiType>} ClientApi
@@ -36,6 +37,10 @@ const myApi = {
    */
   add(a, b) {
     return a + b
+  },
+  /** @param {any} value */
+  echo(value) {
+    return value
   },
   prop: 'foo',
   objectProp: {
@@ -109,34 +114,61 @@ const myApi = {
   },
 }
 
-// Run tests with MessagePort
-// @ts-ignore
-runTests(function setup(api, clientOpts, serverOpts) {
-  const { port1: serverMPort, port2: clientMPort } = new MessagePortPair()
-  /** @type {Exclude<Parameters<typeof createClient>[1], undefined>['logger']} */
-  let logger = false
-  if (process.env.DEBUG) {
-    logger = pino({
-      level: 'debug',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          ignore: 'pid,hostname',
-        },
+/** @returns {Exclude<Parameters<typeof createClient>[1], undefined>['logger']} */
+function makeLogger() {
+  if (!process.env.DEBUG) return false
+  return pino({
+    level: 'debug',
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        ignore: 'pid,hostname',
       },
-    })
-  }
-  return {
-    client: createClient(clientMPort, { logger, ...clientOpts }),
-    server: createServer(api, serverMPort, { logger, ...serverOpts }),
-    clientMPort,
-    serverMPort,
-  }
+    },
+  })
+}
+
+// Run tests with MessagePort
+runTests(function setup(t, api, clientOpts, serverOpts) {
+  const { port1: serverMPort, port2: clientMPort } = new MessageChannel()
+  const logger = makeLogger()
+  const client = /** @type {ClientApi<typeof api>} */ (
+    createClient(clientMPort, { logger, ...clientOpts })
+  )
+  const server = createServer(api, serverMPort, { logger, ...serverOpts })
+  // A real MessageChannel keeps the event loop alive while a port has an active
+  // 'message' listener. Closing the client and server removes those listeners
+  // (so the process can exit) and rejects any in-flight requests instead of
+  // letting them hang to the timeout. Then close the ports to free them.
+  t.teardown(() => {
+    createClient.close(client)
+    server.close()
+    clientMPort.close()
+    serverMPort.close()
+  })
+  return { client, server, clientMPort, serverMPort }
+})
+
+// Run tests with MessagePort-like objects
+runTests(function setup(t, api, clientOpts, serverOpts) {
+  const { port1: serverMPort, port2: clientMPort } = new MessagePortLikePair()
+  const logger = makeLogger()
+  const client = /** @type {ClientApi<typeof api>} */ (
+    createClient(clientMPort, { logger, ...clientOpts })
+  )
+  const server = createServer(api, serverMPort, { logger, ...serverOpts })
+  // The fake doesn't hold the event loop open, but close the client and server
+  // anyway to detach listeners and reject any in-flight requests.
+  t.teardown(() => {
+    createClient.close(client)
+    server.close()
+  })
+  return { client, server, clientMPort, serverMPort }
 })
 
 /**
- * @typedef {<T extends {}>(api: T, clientOpts?: Parameters<typeof createClient>[1], serverOpts?: Parameters<typeof createServer>[2]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>}} SetupFunction
+ * @typedef {<T extends {}>(t: import('tape').Test, api: T, clientOpts?: Parameters<typeof createClient>[1], serverOpts?: Parameters<typeof createServer>[2]) => { client: ClientApi<T>, server: ReturnType<typeof createServer>, clientMPort: MessagePortLike, serverMPort: MessagePortLike }} SetupFunction
  */
 
 /**
@@ -144,7 +176,7 @@ runTests(function setup(api, clientOpts, serverOpts) {
  */
 function runTests(setup) {
   test('Client is instance of EventEmitter3', (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.ok(client instanceof EventEmitter3)
     t.end()
   })
@@ -164,8 +196,31 @@ function runTests(setup) {
     t.end()
   })
 
+  test('Payloads containing `data`/`value` keys round-trip intact', async (t) => {
+    const { client } = setup(t, myApi)
+    // These keys collide with the transport envelope (`data`) and the metadata
+    // container (`value`); they must survive because payloads always travel
+    // nested inside the message, never as the top-level transport value.
+    const payload = {
+      data: 'should-not-be-unwrapped',
+      value: 42,
+      nested: { data: [1, 2, 3], value: { deep: true } },
+    }
+    t.deepEqual(
+      await client.echo(payload),
+      payload,
+      'object with `data` and `value` keys is returned unchanged',
+    )
+    t.deepEqual(
+      await client.echo({ data: { value: 'x' } }),
+      { data: { value: 'x' } },
+      'object that looks exactly like a wrapped container is returned unchanged',
+    )
+    t.end()
+  })
+
   test('Calls methods on server', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.plan(10)
     t.equal(await client.add(1, 2), 3, 'Sync method works')
     t.equal(await client.getLlama(), 'llama', 'Async method works')
@@ -200,7 +255,7 @@ function runTests(setup) {
     const arrayOfBuffers = objectsFixture
       .toString()
       .split(' ')
-      .map((s) => Buffer.from(s))
+      .map((s) => new Uint8Array(Buffer.from(s)))
     t.deepEqual(
       await client.createObjectStream(arrayOfBuffers),
       arrayOfBuffers,
@@ -229,7 +284,7 @@ function runTests(setup) {
   })
 
   test('Nested methods', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.plan(10)
     t.equal(await client.namespace.sub(5, 2), 3, 'nested method works')
     t.equal(await client.deep.nested.mult(2, 3), 6, 'deep nested works')
@@ -290,7 +345,7 @@ function runTests(setup) {
   })
 
   test('Calling non-existent methods rejects with error', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
 
     try {
       // @ts-expect-error
@@ -308,7 +363,7 @@ function runTests(setup) {
   })
 
   test('Closed server does not respond, client times out', async (t) => {
-    const { client, server } = setup(myApi, { timeout: 200 })
+    const { client, server } = setup(t, myApi, { timeout: 200 })
     server.close()
     try {
       await client.add(1, 2)
@@ -341,7 +396,7 @@ function runTests(setup) {
   ]
 
   test('Properties can be accessed as async functions', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.plan(transferrableProps.length)
     for (const prop of transferrableProps) {
       t.deepEqual(
@@ -353,7 +408,7 @@ function runTests(setup) {
   })
 
   test('Cannot call non-existent methods on properties', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.plan(transferrableProps.length)
     for (const prop of transferrableProps) {
       try {
@@ -371,13 +426,13 @@ function runTests(setup) {
   })
 
   test('Nested properties can be accessed as async functions', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.equal(await client.namespace.prop(), 'bar', 'nested property works')
     t.end()
   })
 
   test('Attempting to access a symbol property throws an error', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.plan(2)
     try {
       // @ts-expect-error
@@ -394,7 +449,7 @@ function runTests(setup) {
   })
 
   test('The server ignores subscribe and unsubscribe when handler is not an EventEmitter', (t) => {
-    const { client } = setup({})
+    const { client } = setup(t, {})
     // @ts-expect-error
     client.on('myEvent', t.fail)
     // @ts-expect-error
@@ -408,13 +463,13 @@ function runTests(setup) {
 
   test('Subscribes to events on server', (t) => {
     const emitterApi = new EventEmitter()
-    const { client } = setup(emitterApi)
+    const { client } = setup(t, emitterApi)
     const expected = ['param1', { other: true }]
     client.on('myEvent', (...args) => {
       t.deepEqual(args, expected)
       t.end()
     })
-    process.nextTick(() => {
+    whenServerSubscribed(emitterApi, 'myEvent', () => {
       emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
     })
   })
@@ -422,7 +477,7 @@ function runTests(setup) {
   test('Nested props are emitters', (t) => {
     t.plan(2)
     const emitterApi = new EventEmitter()
-    const { client } = setup({ namespace: emitterApi })
+    const { client } = setup(t, { namespace: emitterApi })
     const expected = ['param1', { other: true }]
     t.true(
       client.namespace instanceof EventEmitter3,
@@ -432,34 +487,33 @@ function runTests(setup) {
       t.deepEqual(args, expected)
       t.end()
     })
-    process.nextTick(() => {
+    whenServerSubscribed(emitterApi, 'myEvent', () => {
       emitterApi.emit.apply(emitterApi, ['myEvent', ...expected])
     })
   })
 
   test('Unsubscribes to events', (t) => {
     const emitterApi = new EventEmitter()
-    const { client } = setup(emitterApi)
+    const { client } = setup(t, emitterApi)
     let count = 0
 
     client.on('myEvent', function listener(...args) {
       if (count++ > 0) return t.fail('Called more than once')
       t.deepEqual(args, ['carrot'], 'Listener called with correct args')
       client.off('myEvent', listener)
+      // The client listener is removed now, so a second emit must not reach it.
+      emitterApi.emit('myEvent', 'carrot')
+      setTimeout(t.end, 200)
     })
 
-    process.nextTick(() => {
+    whenServerSubscribed(emitterApi, 'myEvent', () => {
       emitterApi.emit('myEvent', 'carrot')
-      process.nextTick(() => {
-        emitterApi.emit('myEvent', 'carrot')
-        setTimeout(t.end, 200)
-      })
     })
   })
 
   test('Removing a listener when one still exists does not unsubscribe', (t) => {
     const emitterApi = new EventEmitter()
-    const { client } = setup(emitterApi)
+    const { client } = setup(t, emitterApi)
     let count1 = 0
     let count2 = 0
 
@@ -470,62 +524,65 @@ function runTests(setup) {
     })
 
     client.on('myEvent', function listener2() {
-      if (count2++ === 0) return
+      if (count2++ === 0) {
+        // listener1 has just removed itself but listener2 keeps the server
+        // subscribed, so a second emit must still reach listener2.
+        emitterApi.emit('myEvent', 'carrot')
+        return
+      }
       t.equal(count2, 2, 'Second listener was called twice')
+      setTimeout(t.end, 200)
     })
 
-    process.nextTick(() => {
+    whenServerSubscribed(emitterApi, 'myEvent', () => {
       emitterApi.emit('myEvent', 'carrot')
-      process.nextTick(() => {
-        emitterApi.emit('myEvent', 'carrot')
-        setTimeout(t.end, 200)
-      })
     })
   })
 
   test('Error events pass error object', (t) => {
     t.plan(2)
     const emitterApi = new EventEmitter()
-    const { client } = setup(emitterApi)
+    const { client } = setup(t, emitterApi)
     const expected = new Error('TestError')
     client.on('error', (error) => {
       t.ok(error instanceof Error, 'Error object is returned')
       t.equal(error.message, 'TestError', 'Error message is valid')
     })
-    process.nextTick(() => {
+    whenServerSubscribed(emitterApi, 'error', () => {
       emitterApi.emit.apply(emitterApi, ['error', expected])
     })
   })
 
   test('once works', (t) => {
     const emitterApi = new EventEmitter()
-    const { client } = setup(emitterApi)
+    const { client } = setup(t, emitterApi)
     let count = 0
 
     client.once('myEvent', function listener(...args) {
       if (count++ > 0) return t.fail('Called more than once')
       t.deepEqual(args, ['carrot'])
+      // `once` has removed the client listener and told the server to
+      // unsubscribe; a second emit must not reach it, and once the OFF has been
+      // processed the server should have no listeners left.
+      emitterApi.emit('myEvent', 'carrot')
+      setTimeout(() => {
+        t.equal(
+          emitterApi.eventNames().length,
+          0,
+          'No more listeners on server',
+        )
+        t.end()
+      }, 200)
     })
 
-    process.nextTick(() => {
+    whenServerSubscribed(emitterApi, 'myEvent', () => {
       emitterApi.emit('myEvent', 'carrot')
-      process.nextTick(() => {
-        emitterApi.emit('myEvent', 'carrot')
-        process.nextTick(() => {
-          t.equal(
-            emitterApi.eventNames().length,
-            0,
-            'No more listeners on server',
-          )
-          setTimeout(t.end, 200)
-        })
-      })
     })
   })
 
   test('Other EventEmitter methods work', (t) => {
     const emitterApi = new EventEmitter()
-    const { client } = setup(emitterApi)
+    const { client } = setup(t, emitterApi)
     const noop = () => {}
     client.on('myEvent', noop)
     t.deepEqual(client.eventNames(), ['myEvent'])
@@ -540,9 +597,22 @@ function runTests(setup) {
     t.end()
   })
 
+  test('eventNames() is scoped to the sub-client it is called on', (t) => {
+    const fooEmitter = new EventEmitter()
+    const barEmitter = new EventEmitter()
+    const { client } = setup(t, { foo: fooEmitter, bar: barEmitter })
+    client.foo.on('eventA', () => {})
+    client.bar.on('eventB', () => {})
+    // `foo` and `bar` are different prop arrays of the same length, so filtering
+    // each sub-client's events compares them element by element.
+    t.deepEqual(client.foo.eventNames(), ['eventA'], 'Only foo events returned')
+    t.deepEqual(client.bar.eventNames(), ['eventB'], 'Only bar events returned')
+    t.end()
+  })
+
   test('Closing server removes event listeners on server', (t) => {
     const emitterApi = new EventEmitter()
-    const { client, server } = setup(emitterApi)
+    const { client, server } = setup(t, emitterApi)
 
     client.on('myEvent', () => {})
     client.on('otherEvent', () => {})
@@ -557,7 +627,7 @@ function runTests(setup) {
 
   test('Closing server removes nested event listeners on server', (t) => {
     const emitterApi = new EventEmitter()
-    const { client, server } = setup({
+    const { client, server } = setup(t, {
       nested: emitterApi,
     })
 
@@ -573,7 +643,7 @@ function runTests(setup) {
   })
 
   test('Closing the client stops it receiving messages from server', async (t) => {
-    const { client } = setup(myApi, { timeout: 100 })
+    const { client } = setup(t, myApi, { timeout: 100 })
     t.equal(await client.add(1, 2), 3, 'Sync method works')
     createClient.close(client)
     try {
@@ -589,7 +659,7 @@ function runTests(setup) {
   })
 
   test('Closing the client rejects in-flight requests with "Channel closed"', async (t) => {
-    const { client } = setup(myApi, { timeout: 5000 })
+    const { client } = setup(t, myApi, { timeout: 5000 })
     const inFlight = client.slowMethod()
     createClient.close(client)
     const guard = new Promise((_, reject) =>
@@ -609,14 +679,14 @@ function runTests(setup) {
   })
 
   test('Non-string methods / props are not supported', (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     // @ts-expect-error
     t.throws(() => client[Symbol('test')](), 'Calling a symbol method throws')
     t.end()
   })
 
   test('Accessing a symbol property returns undefined', (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.equal(
       // @ts-expect-error
       client[Symbol('test')],
@@ -627,11 +697,15 @@ function runTests(setup) {
   })
 
   test('console.log on client does not throw', (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     // This was throwing without a trap for util.inspect.custom
     t.doesNotThrow(() => console.log(client))
     t.doesNotThrow(() => console.log(client.add))
-    t.doesNotThrow(() => console.log(client.add(1, 2)))
+    const pending = client.add(1, 2)
+    // The result is irrelevant; swallow it so this fire-and-forget request
+    // doesn't reject unhandled when the channel is torn down.
+    pending.catch(() => {})
+    t.doesNotThrow(() => console.log(pending))
     t.end()
   })
 
@@ -639,14 +713,14 @@ function runTests(setup) {
     // If we don't cache the proxy returned by accessing a property like
     // `client.namespace`, then each time you access it a new Proxy will be
     // created.
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.is(client.namespace, client.namespace)
     t.is(client.deep.nested, client.deep.nested)
     t.end()
   })
 
   test('Can await client and subclients', async (t) => {
-    const { client } = setup(myApi)
+    const { client } = setup(t, myApi)
     t.is(await client, client, 'Same object is returned when awaiting')
     t.is(await client.deep, client.deep)
     t.is(await client.deep.nested, client.deep.nested)
@@ -654,7 +728,7 @@ function runTests(setup) {
   })
 
   test('Client onRequestHook', async (t) => {
-    const { client } = setup(myApi, {
+    const { client } = setup(t, myApi, {
       onRequestHook: async (request, next) => {
         t.deepEqual(
           request.method,
@@ -675,7 +749,7 @@ function runTests(setup) {
   })
 
   test('Client onRequestHook - methods throw in hook', async (t) => {
-    const { client } = setup(myApi, {
+    const { client } = setup(t, myApi, {
       onRequestHook: async (request, next) => {
         const result = next(request)
         try {
@@ -700,7 +774,7 @@ function runTests(setup) {
   })
 
   test('Server onRequestHook', async (t) => {
-    const { client, server } = setup(myApi, undefined, {
+    const { client, server } = setup(t, myApi, undefined, {
       onRequestHook: async (request, next) => {
         t.deepEqual(
           request.method,
@@ -722,7 +796,7 @@ function runTests(setup) {
   })
 
   test('Server onRequestHook - stream result', async (t) => {
-    const { client, server } = setup(myApi, undefined, {
+    const { client, server } = setup(t, myApi, undefined, {
       onRequestHook: async (request, next) => {
         t.deepEqual(
           request.method,
@@ -745,6 +819,7 @@ function runTests(setup) {
 
   test('Passing metadata with onRequestHooks', async (t) => {
     const { client } = setup(
+      t,
       myApi,
       {
         onRequestHook: async (request, next) => {
@@ -772,6 +847,7 @@ function runTests(setup) {
 
   test('Invalid metadata is ignored', async (t) => {
     const { client } = setup(
+      t,
       myApi,
       {
         onRequestHook: async (request, next) => {
@@ -818,6 +894,7 @@ function runTests(setup) {
     }
 
     const { client } = setup(
+      t,
       myApi,
       {
         logger: clientLogger,
@@ -835,5 +912,30 @@ function runTests(setup) {
     t.plan(3)
     const result = await client.add(1, 2)
     t.equal(result, 3, 'Expected result from add method')
+  })
+}
+
+/**
+ * Run `fn` once the server has subscribed to `eventName` on `emitter`. Emitting
+ * any earlier races ahead of the server attaching its listener and the event is
+ * lost. Transports deliver the client's subscribe message with different timing:
+ * a real MessageChannel is asynchronous (the server subscribes after `client.on`
+ * returns), while the MessagePort-like fake is synchronous (it subscribes during
+ * `client.on`). Handle both: if the server is already subscribed, emit on the
+ * next tick; otherwise wait for the `newListener` it fires when it subscribes.
+ *
+ * @param {import('events').EventEmitter} emitter
+ * @param {string} eventName
+ * @param {() => void} fn
+ */
+function whenServerSubscribed(emitter, eventName, fn) {
+  if (emitter.listenerCount(eventName) > 0) {
+    process.nextTick(fn)
+    return
+  }
+  emitter.on('newListener', function onAdd(name) {
+    if (name !== eventName) return
+    emitter.removeListener('newListener', onAdd)
+    process.nextTick(fn)
   })
 }

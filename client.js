@@ -9,6 +9,7 @@ import { stringify, parse } from './lib/prop-array-utils.js'
 import { validateResponseMsg } from './lib/validate-message.js'
 import nullLogger from 'abstract-logging'
 import pDefer from 'p-defer'
+import { isMessageEvent } from './lib/is-message-event.js'
 
 /** @import {MessageContainer, MsgRequestObj} from './lib/types.js' */
 /** @typedef {import('./lib/types.js').MsgRequest} MsgRequest */
@@ -24,7 +25,7 @@ import pDefer from 'p-defer'
  * @typedef {import('./lib/types.js').ClientApi<ApiType>} ClientApi
  */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
-/** @typedef {import('worker_threads').MessagePort} MessagePortNode */
+/** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -42,7 +43,7 @@ const closeProp = Symbol('close')
  * Create an RPC client that will relay any method that is called via `send`. It
  * listens to replies from the server via `receiver`.
  *
- * @param {MessagePort | MessagePortLike | MessagePortNode} channel MessagePort-like object that must implement an `.on('message')` event handler and a `.postMessage()` method.
+ * @param {MessagePortLike} channel MessagePort-like object that must implement an `.addEventListener('message', (event: MessageEvent<any>) => {})` event handler and a `.postMessage()` method.
  * @param {object} [options] Options object
  * @param {number} [options.timeout=5000] Optionally set timeout (default 5000)
  * @param {false | Omit<import('pino').BaseLogger, 'level' | 'silent'>} [options.logger = false] options.logger Set to `false` to disable logging, or pass a pino logger instance to enable logging
@@ -66,12 +67,7 @@ export function createClient(
   const emitter = new EventEmitter()
   let closed = false
 
-  if ('on' in channel) {
-    channel.on('message', handleMessage)
-  } else {
-    /* c8 ignore next 2 - TODO: Add browser tests */
-    channel.addEventListener('message', handleMessage)
-  }
+  channel.addEventListener('message', handleMessageEvent)
 
   /** @param {MsgRequest | MsgOn | MsgOff | MessageContainer} msg */
   function send(msg) {
@@ -115,16 +111,18 @@ export function createClient(
 
   /**
    * Handles an incoming message.
-   * @param {unknown} msg Can be any type, but we only process messages
+   * @param {unknown} event Can be any type, but we only process messages
    * types that we understand, other messages are ignored
    */
-  function handleMessage(msg) {
-    // When using a MessagePort in a browser or electron environment, the
-    // actual data is in `event.data`
-    /* c8 ignore next 3 - TODO: Add browser tests */
-    if (typeof msg === 'object' && msg && 'data' in msg) {
-      msg = msg.data
+  function handleMessageEvent(event) {
+    if (!isMessageEvent(event)) {
+      // This is a runtime check for a broken MessagePort-like implementation
+      // which would break the types anyway
+      log.warn({ event }, 'Received non-MessageEvent (ignored)')
+      return
     }
+
+    const msg = event.data
     try {
       validateResponseMsg(msg)
     } catch (err) {
@@ -209,12 +207,7 @@ export function createClient(
   function handleClose() {
     if (closed) return
     closed = true
-    if ('off' in channel) {
-      channel.off('message', handleMessage)
-      /* c8 ignore next 3 - TODO: Add browser tests */
-    } else {
-      channel.removeEventListener('message', handleMessage)
-    }
+    channel.removeEventListener('message', handleMessageEvent)
     // Reject every in-flight RPC so callers don't have to wait for the
     // per-call timeout to fire when the channel is torn down.
     for (const [, [, reject]] of pending) {

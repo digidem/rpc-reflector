@@ -1,7 +1,7 @@
 import { ExhaustivenessError, invariant } from './lib/utils.js'
 import { serializeError } from 'serialize-error'
 import nullLogger from 'abstract-logging'
-import { isDuplexStream, isReadableStream } from 'is-stream'
+import { isReadableStream } from 'is-stream'
 import { msgType } from './lib/constants.js'
 import { validateMetadata, validateRequestMsg } from './lib/validate-message.js'
 import { parse, stringify } from './lib/prop-array-utils.js'
@@ -9,6 +9,7 @@ import { MessageStream } from './lib/message-stream.js'
 import { isMessagePortLike } from './lib/is-message-port-like.js'
 import { EventEmitter } from 'events'
 import ensureError from 'ensure-error'
+import { isMessageEvent } from './lib/is-message-event.js'
 
 /** @import {MsgRequestObj, Result, Metadata, MsgId} from './lib/types.js'*/
 /** @typedef {import('./lib/types.js').MsgRequest} MsgRequest */
@@ -19,8 +20,7 @@ import ensureError from 'ensure-error'
 /** @typedef {import('./lib/types.js').Message} Message */
 /** @typedef {import('./lib/types.js').NonEmptyArray<string>} NonEmptyStringArray */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
-/** @typedef {import('worker_threads').MessagePort} MessagePortNode */
-
+/** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 /**
  * @public
  * Create an RPC server that will receive messages via `receiver`, call the
@@ -30,7 +30,7 @@ import ensureError from 'ensure-error'
  * object will be called on this object. Methods can return a value, a Promise,
  * or a ReadableStream. Your transport stream must be able to encode/decode any
  * values that your handler returns
- * @param {MessagePort | MessagePortLike | MessagePortNode | import('stream').Duplex} channel A Duplex Stream with objectMode=true or a MessagePort-like object that must implement an `.on('message')` event handler and a `.postMessage()` method.
+ * @param {MessagePortLike} messagePort A MessagePort-like object that must implement an `.addEventListener('message', (event: MessageEvent) => void)` event handler and a `.postMessage()` method.
  * @param {object} [options] Options object
  * @param {false | Omit<import('pino').BaseLogger, 'level' | 'silent'>} [options.logger = false] options.logger Set to `false` to disable logging, or pass a pino logger instance to enable logging
  * @param {(request: MsgRequestObj, next: (request: Omit<MsgRequestObj, 'metadata'>) => Result) => void} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
@@ -38,62 +38,45 @@ import ensureError from 'ensure-error'
  */
 export function createServer(
   handler,
-  channel,
+  messagePort,
   { logger = false, onRequestHook } = {},
 ) {
   invariant(typeof handler === 'object', 'Missing handler object.')
   const log = logger || nullLogger
-  const channelIsStream = isDuplexStream(channel)
   invariant(
-    isMessagePortLike(channel) || channelIsStream,
-    'Must pass a Duplex Stream or a browser MessagePort, node worker.MessagePort, or MessagePort-like object',
+    isMessagePortLike(messagePort),
+    'Must pass a MessagePort-like object',
   )
 
   /** @type {Map<string, (...args: any[]) => void>} */
   let subscriptions = new Map()
 
-  if (channelIsStream) {
-    channel.on('data', handleMessage)
-  } else if ('on' in channel) {
-    channel.on('message', handleMessage)
-    /* c8 ignore next 3 - TODO: Add browser tests */
-  } else {
-    channel.addEventListener('message', handleMessage)
-  }
+  messagePort.addEventListener('message', handleMessageEvent)
 
   /** @param {MsgResponse | MsgEmit} msg */
   function send(msg) {
     // TODO: Do we need back pressure here? Would just result in buffering here
     // vs. buffering in the stream, so probably no
-    if (channelIsStream) {
-      channel.write(msg)
-    } else {
-      channel.postMessage(msg)
-    }
+    messagePort.postMessage(msg)
   }
 
   /**
    * Handles an incoming message.
-   * @param {unknown} messageContainer Can be any type, but we only process messages types that
+   * @param {unknown} event Can be any type, but we only process messages types that
    * we understand, other messages are ignored
    */
-  function handleMessage(messageContainer) {
+  function handleMessageEvent(event) {
+    if (!isMessageEvent(event)) {
+      // This is a runtime check for a broken MessagePort-like implementation
+      // which would break the types anyway
+      log.warn({ event }, 'Received non-MessageEvent (ignored)')
+      return
+    }
     /** @type {unknown} */
     let msg
     /** @type {Metadata | undefined} */
     let metadata
-
-    // When using a MessagePort in a browser or electron environment, the
-    // actual data is in `event.data`
-    /* c8 ignore start - TODO: Add browser tests */
-    if (
-      typeof messageContainer === 'object' &&
-      messageContainer &&
-      'data' in messageContainer
-    ) {
-      messageContainer = messageContainer.data
-    }
-    /* c8 ignore stop */
+    const messageContainer = event.data
 
     // If the message is a MessageContainer, we extract the value and metadata
     if (Array.isArray(messageContainer)) {
@@ -208,11 +191,7 @@ export function createServer(
    */
   function handleStream(msgId, stream) {
     const rs = stream.pipe(new MessageStream(msgId))
-    if (channelIsStream) {
-      rs.pipe(channel, { end: false })
-    } else {
-      rs.on('data', (chunk) => send(chunk))
-    }
+    rs.on('data', (chunk) => send(chunk))
     rs.on('error', (err) =>
       send([msgType.RESPONSE, msgId, serializeError(err)]),
     )
@@ -230,7 +209,6 @@ export function createServer(
       )
       return
     }
-
     const encodedEventName = stringify(propArray, eventName)
 
     // If we are already emitting for this event, we can ignore
@@ -273,14 +251,7 @@ export function createServer(
 
   return {
     close: () => {
-      if (channelIsStream) {
-        channel.off('data', handleMessage)
-      } else if ('off' in channel) {
-        channel.off('message', handleMessage)
-        /* c8 ignore next 3 - TODO: Add browser tests */
-      } else {
-        channel.removeEventListener('message', handleMessage)
-      }
+      messagePort.removeEventListener('message', handleMessageEvent)
       for (const [encodedEventName, listener] of subscriptions.entries()) {
         const [propArray, eventName] = parse(encodedEventName)
         try {

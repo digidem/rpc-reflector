@@ -1,5 +1,4 @@
 import { createClient, createServer } from 'rpc-reflector'
-import { MessagePortPair } from '../test/helpers.js'
 
 const myApi = {
   syncMethod: () => 'result1',
@@ -9,9 +8,9 @@ const myApi = {
     }),
 }
 
-const { port1: serverPort, port2: clientPort } = new MessagePortPair()
+const { port1: serverPort, port2: clientPort } = new MessageChannel()
 
-const { close } = createServer(myApi, serverPort)
+const server = createServer(myApi, serverPort)
 
 const myApiOnClient =
   /** @type {import('../index.js').ClientApi<typeof myApi>} */ (
@@ -23,5 +22,9 @@ const myApiOnClient =
   const result2 = await myApiOnClient.asyncMethod()
   console.log(result1) // 'result1'
   console.log(result2) // 'result2'
-  close()
+  // Tear down so the MessageChannel ports stop keeping the process alive.
+  createClient.close(myApiOnClient)
+  server.close()
+  serverPort.close()
+  clientPort.close()
 })()
