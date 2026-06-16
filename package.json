@@ -75,12 +75,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gmaclennan/rpc-reflector.git"
+    "url": "git+https://github.com/digidem/rpc-reflector.git"
   },
   "bugs": {
-    "url": "https://github.com/gmaclennan/rpc-reflector/issues"
+    "url": "https://github.com/digidem/rpc-reflector/issues"
   },
-  "homepage": "https://github.com/gmaclennan/rpc-reflector#readme",
+  "homepage": "https://github.com/digidem/rpc-reflector#readme",
   "lint-staged": {
     "*.js": [
       "eslint --cache --fix"
