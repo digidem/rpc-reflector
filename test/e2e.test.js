@@ -1,6 +1,6 @@
 // @ts-check
 import test from 'tape'
-import { createClient, createServer } from '../index.js'
+import { createClient, createServer, TimeoutError } from '../index.js'
 import { EventEmitter } from 'events'
 import { EventEmitter as EventEmitter3 } from 'eventemitter3'
 import { readFileSync, createReadStream } from 'fs'
@@ -368,10 +368,15 @@ function runTests(setup) {
     try {
       await client.add(1, 2)
     } catch (error) {
-      t.true(error instanceof Error, 'Threw with error')
+      t.true(error instanceof TimeoutError, 'Threw with a TimeoutError')
+      t.equal(
+        /** @type {any} */ (error).code,
+        'RPC_TIMEOUT',
+        'Error has a stable RPC_TIMEOUT code',
+      )
       t.true(
-        ensureError(error).message.includes('timed out'),
-        'Error message as expected',
+        ensureError(error).message.includes('200ms'),
+        'Error message includes the configured timeout',
       )
     }
     t.end()

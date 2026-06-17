@@ -17,6 +17,10 @@
     "./server.js": {
       "types": "./dist/server.d.ts",
       "default": "./server.js"
+    },
+    "./errors.js": {
+      "types": "./dist/lib/errors.d.ts",
+      "default": "./lib/errors.js"
     }
   },
   "scripts": {
@@ -33,6 +37,7 @@
   "license": "ISC",
   "dependencies": {
     "abstract-logging": "^2.0.1",
+    "custom-error-creator": "^1.4.0",
     "ensure-error": "^4.0.0",
     "eventemitter3": "^5.0.1",
     "is-plain-obj": "^4.1.0",

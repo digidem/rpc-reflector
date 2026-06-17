@@ -106,6 +106,27 @@ The returned `clientApi` will be correctly typed, with synchronous functions con
 
 The static method `close()` will remove all event listeners from the `channel` used to create the client. It will not close or destroy the MessagePort used as the `channel`.
 
+### Errors
+
+The client can reject a call with one of the following error classes. Each carries a stable `.code` property so consumers can identify it without matching against the error message. Both are exported from the package and can also be checked with `instanceof`.
+
+| Class                | `.code`              | Thrown when                                                                                       |
+| -------------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
+| `ChannelClosedError` | `RPC_CHANNEL_CLOSED` | A call is in flight when the client is closed, or a method is called after the client was closed. |
+| `TimeoutError`       | `RPC_TIMEOUT`        | The server does not respond within `options.timeout`.                                             |
+
+```js
+import { createClient, ChannelClosedError } from 'rpc-reflector'
+
+try {
+  await clientApi.someMethod()
+} catch (err) {
+  if (err instanceof ChannelClosedError) {
+    // or: if (err.code === 'RPC_CHANNEL_CLOSED')
+  }
+}
+```
+
 ## Maintainers
 
 [@gmaclennan](https://github.com/gmaclennan)

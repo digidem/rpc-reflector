@@ -1,5 +1,6 @@
 import { EventEmitter } from 'eventemitter3'
 import { ExhaustivenessError, invariant } from './lib/utils.js'
+import { ChannelClosedError, TimeoutError } from './lib/errors.js'
 import { deserializeError } from 'serialize-error'
 import promiseTimeout from 'p-timeout'
 
@@ -211,7 +212,7 @@ export function createClient(
     // Reject every in-flight RPC so callers don't have to wait for the
     // per-call timeout to fire when the channel is torn down.
     for (const [, [, reject]] of pending) {
-      reject(new Error('Channel closed'))
+      reject(new ChannelClosedError())
     }
     pending.clear()
     collector.clear()
@@ -305,7 +306,7 @@ export function createClient(
           throw new TypeError('[target] is not a function')
         }
         if (closed) {
-          return Promise.reject(new Error('Channel closed'))
+          return Promise.reject(new ChannelClosedError())
         }
         const msgId = id++
 
@@ -316,8 +317,7 @@ export function createClient(
           fallback() {
             // Cleanup pending handlers because they will never be called now
             pending.delete(msgId)
-            throw new Error(`Server timed out after ${timeout}ms.
-            The server could be closed or the transport is down.`)
+            throw new TimeoutError({ timeout })
           },
         })
         sendRequest(

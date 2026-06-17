@@ -7,3 +7,4 @@
 
 export { createClient } from './client.js'
 export { createServer } from './server.js'
+export { ChannelClosedError, TimeoutError } from './lib/errors.js'

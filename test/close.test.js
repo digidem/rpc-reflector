@@ -1,12 +1,12 @@
 // @ts-check
 import test from 'tape'
 
-import { createClient } from '../index.js'
+import { createClient, ChannelClosedError } from '../index.js'
 import { msgType } from '../lib/constants.js'
 import { MessagePortLikePair } from './helpers.js'
 
-test('calling a method after close() rejects synchronously with "Channel closed"', (t) => {
-  t.plan(2)
+test('calling a method after close() rejects synchronously with a ChannelClosedError', (t) => {
+  t.plan(3)
   const { port1, port2 } = new MessagePortLikePair()
   let postCloseMessages = 0
   port2.addEventListener('message', () => {
@@ -21,10 +21,14 @@ test('calling a method after close() rejects synchronously with "Channel closed"
     () => t.fail('Expected rejection'),
     /** @param {Error} err */
     (err) => {
+      t.ok(
+        err instanceof ChannelClosedError,
+        'Rejects with a ChannelClosedError instance',
+      )
       t.equal(
-        err.message,
-        'Channel closed',
-        'Method called after close rejects with "Channel closed"',
+        /** @type {any} */ (err).code,
+        'RPC_CHANNEL_CLOSED',
+        'Error has a stable RPC_CHANNEL_CLOSED code',
       )
       t.equal(postCloseMessages, 0, 'No IPC message is sent after close')
     },
@@ -82,10 +86,9 @@ test('close() also clears collector entries (no leaked half-streamed responses)'
       () => t.fail('Expected rejection'),
       /** @param {Error} err */
       (err) => {
-        t.equal(
-          err.message,
-          'Channel closed',
-          'Streaming request rejects with "Channel closed" on close',
+        t.ok(
+          err instanceof ChannelClosedError,
+          'Streaming request rejects with a ChannelClosedError on close',
         )
       },
     )
