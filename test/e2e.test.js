@@ -13,6 +13,7 @@ import path from 'path'
 import { pino } from 'pino'
 import { isReadableStream } from 'is-stream'
 import nullLogger from 'abstract-logging'
+import { isErrorWithCode } from 'custom-error-creator'
 
 /** @import {MessagePortLike} from '../index.js' */
 /**
@@ -654,10 +655,12 @@ function runTests(setup) {
     try {
       await client.add(1, 2)
     } catch (err) {
+      if (!isErrorWithCode(err))
+        return t.fail('Error does not have a code property')
       t.equal(
-        ensureError(err).message,
-        'Channel closed',
-        'Should fail with "Channel closed"',
+        err.code,
+        'RPC_CHANNEL_CLOSED',
+        'Error has a stable RPC_CHANNEL_CLOSED code',
       )
     }
     t.end()
@@ -674,10 +677,12 @@ function runTests(setup) {
       await Promise.race([inFlight, guard])
       t.fail('Expected rejection')
     } catch (err) {
+      if (!isErrorWithCode(err))
+        return t.fail('Error does not have a code property')
       t.equal(
-        ensureError(err).message,
-        'Channel closed',
-        'In-flight request rejects fast with "Channel closed"',
+        err.code,
+        'RPC_CHANNEL_CLOSED',
+        'Error has a stable RPC_CHANNEL_CLOSED code',
       )
     }
     t.end()
