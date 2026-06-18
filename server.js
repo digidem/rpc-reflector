@@ -21,6 +21,8 @@ import { isMessageEvent } from './lib/is-message-event.js'
 /** @typedef {import('./lib/types.js').NonEmptyArray<string>} NonEmptyStringArray */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
+/** @typedef {(request: MsgRequestObj, next: (request: Omit<MsgRequestObj, 'metadata'>) => Result) => void} OnRequestHook */
+
 /**
  * @public
  * Create an RPC server that will receive messages via `receiver`, call the
@@ -33,7 +35,7 @@ import { isMessageEvent } from './lib/is-message-event.js'
  * @param {MessagePortLike} messagePort A MessagePort-like object that must implement an `.addEventListener('message', (event: MessageEvent) => void)` event handler and a `.postMessage()` method.
  * @param {object} [options] Options object
  * @param {false | Omit<import('pino').BaseLogger, 'level' | 'silent'>} [options.logger = false] options.logger Set to `false` to disable logging, or pass a pino logger instance to enable logging
- * @param {(request: MsgRequestObj, next: (request: Omit<MsgRequestObj, 'metadata'>) => Result) => void} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ * @param {OnRequestHook} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
  * @returns {{ close: () => void }} An object with a single method `close()` that will stop the server listening to and sending any more messages
  */
 export function createServer(

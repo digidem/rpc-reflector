@@ -4,6 +4,8 @@
  */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
+/** @typedef {import('./client.js').OnRequestHook} ClientOnRequestHook */
+/** @typedef {import('./server.js').OnRequestHook} ServerOnRequestHook */
 
 export { createClient } from './client.js'
 export { createServer } from './server.js'

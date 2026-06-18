@@ -27,6 +27,7 @@ import { isMessageEvent } from './lib/is-message-event.js'
  */
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
+/** @typedef {(request: Omit<MsgRequestObj, 'metadata'>, next: (request: MsgRequestObj) => Promise<any>) => void} OnRequestHook */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -48,7 +49,7 @@ const closeProp = Symbol('close')
  * @param {object} [options] Options object
  * @param {number} [options.timeout=5000] Optionally set timeout (default 5000)
  * @param {false | Omit<import('pino').BaseLogger, 'level' | 'silent'>} [options.logger = false] options.logger Set to `false` to disable logging, or pass a pino logger instance to enable logging
- * @param {(request: Omit<MsgRequestObj, 'metadata'>, next: (request: MsgRequestObj) => Promise<any>) => void} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ * @param {OnRequestHook} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
  * @returns {ClientApi<ApiType>}
  */
 export function createClient(
