@@ -131,6 +131,21 @@ export type ClientApi<ServerApi extends {}> = {
             : () => Promise<ServerApi[KeyType]>
 }
 
+type LogFn = (...args: any[]) => void
+
+/**
+ * The subset of a logger interface that RPC Reflector uses. Matches a pino
+ * logger and the global `console` (no `fatal`), so either can be passed as
+ * `options.logger`.
+ */
+export interface Logger {
+  trace: LogFn
+  debug: LogFn
+  info: LogFn
+  warn: LogFn
+  error: LogFn
+}
+
 export type Metadata = Record<string, string>
 export type MsgRequestObj = {
   msgId: MsgId

@@ -22,6 +22,12 @@ import { isMessageEvent } from './lib/is-message-event.js'
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 /** @typedef {(request: MsgRequestObj, next: (request: Omit<MsgRequestObj, 'metadata'>) => Result) => void} OnRequestHook */
+/** @typedef {import('./lib/types.js').Logger} Logger */
+/**
+ * @typedef {object} ServerOptions
+ * @property {false | Logger} [logger = false] options.logger Set to `false` to disable logging, or pass a logger (e.g. a pino instance or the global `console`) to enable it
+ * @property {OnRequestHook} [onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ */
 
 /**
  * @public
@@ -33,9 +39,7 @@ import { isMessageEvent } from './lib/is-message-event.js'
  * or a ReadableStream. Your transport stream must be able to encode/decode any
  * values that your handler returns
  * @param {MessagePortLike} messagePort A MessagePort-like object that must implement an `.addEventListener('message', (event: MessageEvent) => void)` event handler and a `.postMessage()` method.
- * @param {object} [options] Options object
- * @param {false | Omit<import('pino').BaseLogger, 'level' | 'silent'>} [options.logger = false] options.logger Set to `false` to disable logging, or pass a pino logger instance to enable logging
- * @param {OnRequestHook} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ * @param {ServerOptions} [options] Options object
  * @returns {{ close: () => void }} An object with a single method `close()` that will stop the server listening to and sending any more messages
  */
 export function createServer(
@@ -54,6 +58,7 @@ export function createServer(
   let subscriptions = new Map()
 
   messagePort.addEventListener('message', handleMessageEvent)
+  log.info('RPC server created')
 
   /** @param {MsgResponse | MsgEmit} msg */
   function send(msg) {
@@ -226,6 +231,7 @@ export function createServer(
     }
     subscriptions.set(encodedEventName, listener)
     emitter.on(eventName, listener)
+    log.debug({ eventName, propArray }, 'Subscribed to handler event')
   }
 
   /** @param {MsgOff} msg */
@@ -249,11 +255,13 @@ export function createServer(
     const listener = subscriptions.get(encodedEventName)
     listener && emitter.removeListener(eventName, listener)
     subscriptions.delete(encodedEventName)
+    log.debug({ eventName, propArray }, 'Unsubscribed from handler event')
   }
 
   return {
     close: () => {
       messagePort.removeEventListener('message', handleMessageEvent)
+      const subscriptionCount = subscriptions.size
       for (const [encodedEventName, listener] of subscriptions.entries()) {
         const [propArray, eventName] = parse(encodedEventName)
         try {
@@ -264,6 +272,7 @@ export function createServer(
         }
       }
       subscriptions = new Map()
+      log.info({ subscriptionCount }, 'RPC server closed')
     },
   }
 }

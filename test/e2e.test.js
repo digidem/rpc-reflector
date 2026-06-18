@@ -6,13 +6,16 @@ import { EventEmitter as EventEmitter3 } from 'eventemitter3'
 import { readFileSync, createReadStream } from 'fs'
 import { join } from 'path'
 import intoStream from 'into-stream'
-import { MessagePortLikePair, ReadableError } from './helpers.js'
+import {
+  MessagePortLikePair,
+  ReadableError,
+  createTestLogger,
+} from './helpers.js'
 import ensureError from 'ensure-error'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import { pino } from 'pino'
 import { isReadableStream } from 'is-stream'
-import nullLogger from 'abstract-logging'
 import { isErrorWithCode } from 'custom-error-creator'
 
 /** @import {MessagePortLike} from '../index.js' */
@@ -887,23 +890,17 @@ function runTests(setup) {
   test('Error in onRequestHook is ignored', async (t) => {
     const clientHookError = new Error('Test error in client onRequestHook')
     const serverHookError = new Error('Test error in server onRequestHook')
-    const clientLogger = {
-      ...nullLogger,
-      msgPrefix: undefined,
-      // @ts-ignore
+    const clientLogger = createTestLogger({
       error(obj) {
         t.equal(obj.err, clientHookError, 'Client hook error logged')
       },
-    }
+    })
 
-    const serverLogger = {
-      ...nullLogger,
-      msgPrefix: undefined,
-      // @ts-ignore
+    const serverLogger = createTestLogger({
       error(obj) {
         t.equal(obj.err, serverHookError, 'Server hook error logged')
       },
-    }
+    })
 
     const { client } = setup(
       t,
