@@ -1,10 +1,9 @@
 //@ts-nocheck
 import test from 'tape'
-import nullLogger from 'abstract-logging'
 
 import { createServer } from '../index.js'
 import invalidMessages from './fixtures/invalid-messages.js'
-import { MessagePortLike } from './helpers.js'
+import { MessagePortLike, createTestLogger } from './helpers.js'
 
 test('Ignores invalid messages', (t) => {
   t.plan(1)
@@ -41,8 +40,7 @@ test('Ignores invalid messages', (t) => {
 test('Ignores a message that is not a MessageEvent', (t) => {
   t.plan(1)
   const port = new MessagePortLike(() => {})
-  const logger = {
-    ...nullLogger,
+  const logger = createTestLogger({
     warn(_obj, msg) {
       t.equal(
         msg,
@@ -50,7 +48,7 @@ test('Ignores a message that is not a MessageEvent', (t) => {
         'Warns and ignores the broken message',
       )
     },
-  }
+  })
   createServer({}, port, { logger })
   // A correct port delivers `{ data: msg }`; this one emits a shape without
   // `data`, which isn't a MessageEvent and must be ignored.

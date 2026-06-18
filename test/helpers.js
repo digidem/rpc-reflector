@@ -57,6 +57,24 @@ export class MessagePortLikePair {
   }
 }
 
+/**
+ * A no-op logger satisfying the `Logger` interface, with optional method
+ * overrides for asserting on specific log calls in a test.
+ *
+ * @param {Partial<import('../lib/types.js').Logger>} [overrides]
+ * @returns {import('../lib/types.js').Logger}
+ */
+export function createTestLogger(overrides = {}) {
+  return {
+    trace() {},
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
+    ...overrides,
+  }
+}
+
 export class ReadableError extends Readable {
   /** @param {Error} err */
   constructor(err) {

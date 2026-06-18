@@ -28,6 +28,13 @@ import { isMessageEvent } from './lib/is-message-event.js'
 /** @typedef {import('./lib/types.js').MessagePortLike} MessagePortLike */
 /** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 /** @typedef {(request: Omit<MsgRequestObj, 'metadata'>, next: (request: MsgRequestObj) => Promise<any>) => void} OnRequestHook */
+/** @typedef {import('./lib/types.js').Logger} Logger */
+/**
+ * @typedef {object} ClientOptions
+ * @property {number} [timeout=5000] Optionally set timeout (default 5000)
+ * @property {false | Logger} [logger = false] options.logger Set to `false` to disable logging, or pass a logger (e.g. a pino instance or the global `console`) to enable it
+ * @property {OnRequestHook} [onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ */
 
 const emitterSubscribeMethods = [
   'addListener',
@@ -46,10 +53,7 @@ const closeProp = Symbol('close')
  * listens to replies from the server via `receiver`.
  *
  * @param {MessagePortLike} channel MessagePort-like object that must implement an `.addEventListener('message', (event: MessageEvent<any>) => {})` event handler and a `.postMessage()` method.
- * @param {object} [options] Options object
- * @param {number} [options.timeout=5000] Optionally set timeout (default 5000)
- * @param {false | Omit<import('pino').BaseLogger, 'level' | 'silent'>} [options.logger = false] options.logger Set to `false` to disable logging, or pass a pino logger instance to enable logging
- * @param {OnRequestHook} [options.onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ * @param {ClientOptions} [options] Options object
  * @returns {ClientApi<ApiType>}
  */
 export function createClient(
@@ -70,6 +74,7 @@ export function createClient(
   let closed = false
 
   channel.addEventListener('message', handleMessageEvent)
+  log.info({ timeout }, 'RPC client created')
 
   /** @param {MsgRequest | MsgOn | MsgOff | MessageContainer} msg */
   function send(msg) {
@@ -212,6 +217,7 @@ export function createClient(
     channel.removeEventListener('message', handleMessageEvent)
     // Reject every in-flight RPC so callers don't have to wait for the
     // per-call timeout to fire when the channel is torn down.
+    const pendingCount = pending.size
     for (const [, [, reject]] of pending) {
       reject(new ChannelClosedError())
     }
@@ -220,6 +226,7 @@ export function createClient(
     // TODO: Should we do this? Or leave it to the user? It's considered "bad
     // practice" to do this
     emitter.removeAllListeners()
+    log.info({ pendingCount }, 'RPC client closed')
   }
 
   const subClientCache = new Map()
