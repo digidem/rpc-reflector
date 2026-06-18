@@ -889,6 +889,7 @@ function runTests(setup) {
     const serverHookError = new Error('Test error in server onRequestHook')
     const clientLogger = {
       ...nullLogger,
+      msgPrefix: undefined,
       // @ts-ignore
       error(obj) {
         t.equal(obj.err, clientHookError, 'Client hook error logged')
@@ -897,6 +898,7 @@ function runTests(setup) {
 
     const serverLogger = {
       ...nullLogger,
+      msgPrefix: undefined,
       // @ts-ignore
       error(obj) {
         t.equal(obj.err, serverHookError, 'Server hook error logged')
