@@ -110,6 +110,7 @@ test('Ignores a message that is not a MessageEvent', (t) => {
   const port = new MessagePortLike(() => {})
   const logger = {
     ...nullLogger,
+    msgPrefix: undefined,
     // @ts-ignore - pino-style warn(obj, msg)
     warn(_obj, msg) {
       t.equal(
