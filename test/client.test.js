@@ -104,6 +104,70 @@ test('Ignores invalid messages', (t) => {
     )
 })
 
+test('Responses do not cross between clients sharing one transport', (t) => {
+  // Regression for https://github.com/digidem/rpc-reflector/issues/46: two
+  // clients over a single transport used to both number msgIds from 0, so a
+  // late response for one client could resolve the other's pending call.
+  t.plan(3)
+
+  // Each client picks its msgId namespace from Math.random() at creation. Force
+  // two distinct draws so the test is deterministic — a real-world nonce
+  // collision (~1e-8) would be an actual #46 recurrence, not a test artifact.
+  const realRandom = Math.random
+  const nonces = [0.1, 0.6]
+  let draw = 0
+  Math.random = () => nonces[draw++] ?? realRandom()
+  t.teardown(() => {
+    Math.random = realRandom
+  })
+
+  /** @type {import('../lib/types.js').MsgRequest[]} */
+  const requests = []
+  // A single shared port that broadcasts every response to all listeners, as a
+  // real shared MessagePort does. Both clients attach to it.
+  const sharedPort = new MessagePortLike((msg) => requests.push(msg))
+
+  const clientA = createClient(/** @type {any} */ (sharedPort), {
+    timeout: 200,
+  })
+  const clientB = createClient(/** @type {any} */ (sharedPort), {
+    timeout: 200,
+  })
+
+  const callA = /** @type {any} */ (clientA).deviceId()
+  const callB = /** @type {any} */ (clientB).createProject()
+
+  const [reqA, reqB] = requests
+  t.notEqual(reqA[1], reqB[1], 'The two clients use distinct msgIds')
+
+  // Deliver responses in crossed order: clientA's response carries clientB's
+  // value first. Each is broadcast to both clients; only the matching msgId
+  // resolves.
+  sharedPort.dispatchEvent(
+    /** @type {any} */ ({
+      type: 'message',
+      data: [msgType.RESPONSE, reqA[1], null, 'deviceId-value'],
+    }),
+  )
+  sharedPort.dispatchEvent(
+    /** @type {any} */ ({
+      type: 'message',
+      data: [msgType.RESPONSE, reqB[1], null, 'project-value'],
+    }),
+  )
+
+  callA.then(
+    /** @param {any} value */ (value) =>
+      t.equal(value, 'deviceId-value', 'clientA resolves with its own value'),
+    t.fail,
+  )
+  callB.then(
+    /** @param {any} value */ (value) =>
+      t.equal(value, 'project-value', 'clientB resolves with its own value'),
+    t.fail,
+  )
+})
+
 test('Ignores a message that is not a MessageEvent', (t) => {
   t.plan(1)
   const port = new MessagePortLike(() => {})

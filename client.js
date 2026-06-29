@@ -46,6 +46,19 @@ const emitterSubscribeMethods = [
 const emitterUnsubscribeMethods = ['removeListener', 'off']
 const closeProp = Symbol('close')
 
+// Per-call message ids are namespaced into a random band so that the id spaces
+// of two client instances sharing one transport (or one client re-created
+// across a reconnect/reload) don't overlap. A foreign or stale response then
+// carries a msgId outside this instance's band, misses `pending`, and is
+// ignored instead of resolving the wrong call.
+// See https://github.com/digidem/rpc-reflector/issues/46
+//
+// msgId = nonce * COUNTER_RANGE + counter, kept within Number.MAX_SAFE_INTEGER
+// (2**53 - 1) so it survives structured clone / JSON transport exactly: the
+// nonce uses the high 27 bits, the counter the low 26 bits.
+const COUNTER_RANGE = 2 ** 26
+const NONCE_RANGE = 2 ** 27
+
 /**
  * @public
  * @template {{}} ApiType
@@ -65,7 +78,8 @@ export function createClient(
     'Must pass a browser MessagePort, node worker.MessagePort, or MessagePort-like object',
   )
   const log = logger || nullLogger
-  let id = 0
+  const nonceBase = Math.floor(Math.random() * NONCE_RANGE) * COUNTER_RANGE
+  let counter = 0
   /** @type {Map<number, [(value?: any) => void, (reason?: any) => void]>} */
   const pending = new Map() // Messages pending response
   /** @type {Map<number, Array<any>>} */
@@ -316,7 +330,8 @@ export function createClient(
         if (closed) {
           return Promise.reject(new ChannelClosedError())
         }
-        const msgId = id++
+        const msgId = nonceBase + counter
+        counter = (counter + 1) % COUNTER_RANGE
 
         const { resolve, reject, promise } = pDefer()
         pending.set(msgId, [resolve, reject])
