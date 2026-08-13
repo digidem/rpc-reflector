@@ -118,6 +118,67 @@ test('resubscribe() re-sends ON for root and nested events with listeners, but n
   t.end()
 })
 
+test('emitLocal() emits to locally-registered listeners without wire traffic', (t) => {
+  const { port1, port2 } = new MessagePortLikePair()
+  /** @type {unknown[]} */
+  const wireMessages = []
+  port2.addEventListener('message', (event) => {
+    wireMessages.push('data' in event ? event.data : undefined)
+  })
+
+  const client = createClient(port1, { timeout: 200 })
+  /** @type {unknown[][]} */
+  const received = []
+  // @ts-expect-error
+  client.once('close', (...args) => received.push(args))
+
+  wireMessages.length = 0
+  const hadListeners = createClient.emitLocal(client, 'close', 'arg1', 2)
+
+  t.ok(hadListeners, 'Returns true when the event had listeners')
+  t.deepEqual(
+    received,
+    [['arg1', 2]],
+    'Listener registered via .once() receives the event and its args (encoded-name round trip)',
+  )
+  t.equal(wireMessages.length, 0, 'No messages are sent over the wire')
+
+  t.equal(
+    createClient.emitLocal(client, 'close'),
+    false,
+    'Returns false once the .once() listener has been removed',
+  )
+  t.end()
+})
+
+test('emitLocal() does not reach nested sub-client listeners and is a no-op after close()', (t) => {
+  const { port1, port2 } = new MessagePortLikePair()
+  port2.addEventListener('message', () => {})
+  const client = createClient(port1, { timeout: 200 })
+
+  let nestedCalls = 0
+  // @ts-expect-error
+  client.$sub.on('close', () => nestedCalls++)
+  t.equal(
+    createClient.emitLocal(client, 'close'),
+    false,
+    'Returns false when only a nested sub-client has a listener',
+  )
+  t.equal(nestedCalls, 0, 'Nested sub-client listener is not called')
+
+  let rootCalls = 0
+  // @ts-expect-error
+  client.on('close', () => rootCalls++)
+  createClient.close(client)
+  t.equal(
+    createClient.emitLocal(client, 'close'),
+    false,
+    'Returns false on a closed client',
+  )
+  t.equal(rootCalls, 0, 'No listener is called after close')
+  t.end()
+})
+
 test('rejectPending() and resubscribe() are no-ops after close()', (t) => {
   const { port1, port2 } = new MessagePortLikePair()
   let messagesAfterClose = 0
