@@ -47,7 +47,6 @@ const emitterUnsubscribeMethods = ['removeListener', 'off']
 const closeProp = Symbol('close')
 const rejectPendingProp = Symbol('rejectPending')
 const resubscribeProp = Symbol('resubscribe')
-const emitLocalProp = Symbol('emitLocal')
 
 // Per-call message ids are namespaced into a random band so that the id spaces
 // of two client instances sharing one transport (or one client re-created
@@ -264,28 +263,15 @@ export function createClient(
   function handleResubscribe() {
     if (closed) return 0
     let onCount = 0
-    // eventemitter3's eventNames() only lists events that currently have
-    // listeners, so no listener-count check is needed here.
     for (const encodedEventName of emitter.eventNames()) {
       if (typeof encodedEventName !== 'string') continue
+      if (emitter.listenerCount(encodedEventName) === 0) continue
       const [eventPropArray, eventName] = parse(encodedEventName)
       send([msgType.ON, eventName, eventPropArray])
       onCount++
     }
     log.info({ onCount }, 'Re-sent event subscriptions')
     return onCount
-  }
-
-  /**
-   * @param {string} eventName
-   * @param {any[]} args
-   */
-  function handleEmitLocal(eventName, args) {
-    if (closed) return false
-    // Listeners are stored under encoded names (propArray + eventName), so a
-    // plain `emitter.emit(eventName)` would miss them.
-    const encodedEventName = stringify([], eventName)
-    return Reflect.apply(emitter.emit, emitter, [encodedEventName, ...args])
   }
 
   const subClientCache = new Map()
@@ -311,9 +297,6 @@ export function createClient(
         }
         if (prop === resubscribeProp && propArray.length === 0) {
           return handleResubscribe
-        }
-        if (prop === emitLocalProp && propArray.length === 0) {
-          return handleEmitLocal
         }
         // if (prop === util.inspect.custom) {
         //   // Only Node < 12, not called in browsers
@@ -462,27 +445,6 @@ createClient.rejectPending = function rejectPending(client, error) {
  */
 createClient.resubscribe = function resubscribe(client) {
   return client[resubscribeProp]()
-}
-
-/**
- * Emit an event locally to listeners registered on the root client, without
- * any wire traffic. Use this when the transport owner needs to deliver an
- * event that the (dead or unreachable) server can no longer send — e.g.
- * firing `'close'` teardown listeners when tearing down a client after the
- * server process died. Only listeners registered directly on the root client
- * (not on nested sub-clients) receive the event. No-op (returning `false`)
- * if the client is closed.
- *
- * Note this is a static method on `createClient` and it expects a client
- * created with `createClient` as its argument.
- *
- * @param {any} client A client created with `createClient`
- * @param {string} eventName Event name to emit
- * @param {...any} args Arguments passed to each listener
- * @returns {boolean} `true` if the event had listeners, `false` otherwise
- */
-createClient.emitLocal = function emitLocal(client, eventName, ...args) {
-  return client[emitLocalProp](eventName, args)
 }
 
 /**
