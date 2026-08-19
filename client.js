@@ -45,6 +45,8 @@ const emitterSubscribeMethods = [
 ]
 const emitterUnsubscribeMethods = ['removeListener', 'off']
 const closeProp = Symbol('close')
+const rejectPendingProp = Symbol('rejectPending')
+const resubscribeProp = Symbol('resubscribe')
 
 // Per-call message ids are namespaced into a random band so that the id spaces
 // of two client instances sharing one transport (or one client re-created
@@ -243,6 +245,35 @@ export function createClient(
     log.info({ pendingCount }, 'RPC client closed')
   }
 
+  /** @param {Error} error */
+  function handleRejectPending(error) {
+    if (closed) return 0
+    const pendingCount = pending.size
+    // Rejecting the inner promise settles the p-timeout wrapper, which clears
+    // its timer, so no timers leak and the fallback cannot double-settle.
+    for (const [, [, reject]] of pending) {
+      reject(error)
+    }
+    pending.clear()
+    collector.clear()
+    log.info({ pendingCount }, 'Rejected pending RPC calls')
+    return pendingCount
+  }
+
+  function handleResubscribe() {
+    if (closed) return 0
+    let onCount = 0
+    for (const encodedEventName of emitter.eventNames()) {
+      if (typeof encodedEventName !== 'string') continue
+      if (emitter.listenerCount(encodedEventName) === 0) continue
+      const [eventPropArray, eventName] = parse(encodedEventName)
+      send([msgType.ON, eventName, eventPropArray])
+      onCount++
+    }
+    log.info({ onCount }, 'Re-sent event subscriptions')
+    return onCount
+  }
+
   const subClientCache = new Map()
 
   return createSubClient([], {})
@@ -260,6 +291,12 @@ export function createClient(
       get(target, prop) {
         if (prop === closeProp && propArray.length === 0) {
           return () => handleClose()
+        }
+        if (prop === rejectPendingProp && propArray.length === 0) {
+          return handleRejectPending
+        }
+        if (prop === resubscribeProp && propArray.length === 0) {
+          return handleResubscribe
         }
         // if (prop === util.inspect.custom) {
         //   // Only Node < 12, not called in browsers
@@ -373,6 +410,41 @@ export function createClient(
  */
 createClient.close = function close(client) {
   return client[closeProp]()
+}
+
+/**
+ * Reject every in-flight method call on a client with the given error, e.g.
+ * when the transport has dropped and pending calls can never be answered.
+ * Unlike `close`, the client remains fully usable afterwards. A response
+ * arriving later for a rejected call is ignored. No-op (returning 0) if
+ * nothing is pending or the client is closed.
+ *
+ * Note this is a static method on `createClient` and it expects a client
+ * created with `createClient` as its argument.
+ *
+ * @param {any} client A client created with `createClient`
+ * @param {Error} error Error to reject each pending call with
+ * @returns {number} Number of calls rejected
+ */
+createClient.rejectPending = function rejectPending(client, error) {
+  return client[rejectPendingProp](error)
+}
+
+/**
+ * Re-send an `ON` subscription message to the server for every event
+ * (including events on nested sub-clients) that currently has at least one
+ * listener. Use this after the server has restarted and lost its
+ * subscription state: the reconnected server will start emitting the
+ * subscribed events again. No-op (returning 0) if the client is closed.
+ *
+ * Note this is a static method on `createClient` and it expects a client
+ * created with `createClient` as its argument.
+ *
+ * @param {any} client A client created with `createClient`
+ * @returns {number} Number of subscription (`ON`) messages sent
+ */
+createClient.resubscribe = function resubscribe(client) {
+  return client[resubscribeProp]()
 }
 
 /**
