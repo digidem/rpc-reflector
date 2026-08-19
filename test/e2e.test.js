@@ -691,6 +691,198 @@ function runTests(setup) {
     t.end()
   })
 
+  test('rejectPending() rejects in-flight calls and the client stays usable', async (t) => {
+    const api = {
+      neverResolves() {
+        return new Promise(() => {})
+      },
+      /**
+       * @param {number} a
+       * @param {number} b
+       */
+      add(a, b) {
+        return a + b
+      },
+    }
+    const { client } = setup(t, api, { timeout: 200 })
+    const transportError = new Error('transport dropped')
+
+    const inFlight = [client.neverResolves(), client.neverResolves()]
+
+    t.equal(
+      createClient.rejectPending(client, transportError),
+      2,
+      'Returns the number of calls rejected',
+    )
+    for (const call of inFlight) {
+      try {
+        await call
+        t.fail('Expected rejection')
+      } catch (err) {
+        t.equal(err, transportError, 'Rejects with the caller-supplied error')
+      }
+    }
+
+    t.equal(
+      createClient.rejectPending(client, transportError),
+      0,
+      'Returns 0 when nothing is pending',
+    )
+
+    // Wait past the call timeout so any timer left behind by the rejected calls
+    // has had a chance to fire before we check the client is still healthy.
+    await delay(300)
+    t.equal(await client.add(1, 2), 3, 'Client still works after rejectPending')
+    t.end()
+  })
+
+  test('A late response for a call rejected by rejectPending() is ignored', async (t) => {
+    /** @type {(value: string) => void} */
+    let respond = () => {}
+    /** @type {() => void} */
+    let onServerCalled = () => {}
+    const serverCalled = new Promise((resolve) => {
+      onServerCalled = () => resolve(undefined)
+    })
+    const api = {
+      slowMethod() {
+        onServerCalled()
+        return new Promise((resolve) => {
+          respond = resolve
+        })
+      },
+      /**
+       * @param {number} a
+       * @param {number} b
+       */
+      add(a, b) {
+        return a + b
+      },
+    }
+    /** @type {unknown[]} */
+    const warnings = []
+    const logger = createTestLogger({
+      warn: (...args) => warnings.push(args),
+    })
+    const { client } = setup(t, api, { timeout: 5000, logger })
+
+    const inFlight = client.slowMethod()
+    // The server must be handling the call before we give up on it, otherwise
+    // there is nothing in flight to answer late.
+    await serverCalled
+    createClient.rejectPending(client, new Error('transport dropped'))
+    await inFlight.catch(() => {})
+
+    // The server only now answers the call the client has already given up on.
+    respond('late result')
+    await delay(200)
+
+    t.equal(warnings.length, 1, 'Late response is logged as ignored')
+    t.equal(
+      await client.add(1, 2),
+      3,
+      'Client still works after a late response',
+    )
+    t.end()
+  })
+
+  test('resubscribe() restores event subscriptions on a restarted server', async (t) => {
+    const rootEmitter = new EventEmitter()
+    const nestedEmitter = new EventEmitter()
+    const api = Object.assign(rootEmitter, { nested: nestedEmitter })
+    const { client, server, serverMPort } = setup(t, api)
+
+    /** @type {string[]} */
+    const received = []
+    const unsubscribed = () => received.push('unsubscribedEvent')
+    client.on('rootEvent', () => received.push('rootEvent'))
+    client.nested.on('nestedEvent', () => received.push('nestedEvent'))
+    client.on('unsubscribedEvent', unsubscribed)
+    client.off('unsubscribedEvent', unsubscribed)
+    await delay(200)
+
+    // Restart the server: closing it drops its listeners and the replacement
+    // starts with no subscription state, as a real server restart would.
+    server.close()
+    const restartedServer = createServer(api, serverMPort, {
+      logger: makeLogger(),
+    })
+    t.teardown(() => restartedServer.close())
+
+    rootEmitter.emit('rootEvent')
+    nestedEmitter.emit('nestedEvent')
+    await delay(200)
+    t.deepEqual(received, [], 'Restarted server emits nothing to the client')
+
+    t.equal(
+      createClient.resubscribe(client),
+      2,
+      'Returns the number of subscriptions re-sent',
+    )
+    await delay(200)
+    t.deepEqual(
+      rootEmitter.eventNames(),
+      ['rootEvent'],
+      'Only the root event that still has a listener is re-subscribed',
+    )
+    t.deepEqual(
+      nestedEmitter.eventNames(),
+      ['nestedEvent'],
+      'Nested event is re-subscribed',
+    )
+
+    rootEmitter.emit('rootEvent')
+    nestedEmitter.emit('nestedEvent')
+    await delay(200)
+    t.deepEqual(
+      received.sort(),
+      ['nestedEvent', 'rootEvent'],
+      'Events reach the client again after resubscribe',
+    )
+    t.end()
+  })
+
+  test('rejectPending() and resubscribe() are no-ops after close()', async (t) => {
+    const emitter = new EventEmitter()
+    const api = Object.assign(emitter, {
+      neverResolves() {
+        return new Promise(() => {})
+      },
+    })
+    const { client, server, serverMPort } = setup(t, api, { timeout: 5000 })
+
+    client.on('someEvent', () => {})
+    const inFlight = client.neverResolves()
+    await delay(200)
+
+    createClient.close(client)
+    await inFlight.catch(() => {})
+
+    server.close()
+    const restartedServer = createServer(api, serverMPort, {
+      logger: makeLogger(),
+    })
+    t.teardown(() => restartedServer.close())
+
+    t.equal(
+      createClient.rejectPending(client, new Error('nope')),
+      0,
+      'rejectPending() returns 0 on a closed client',
+    )
+    t.equal(
+      createClient.resubscribe(client),
+      0,
+      'resubscribe() returns 0 on a closed client',
+    )
+    await delay(200)
+    t.equal(
+      emitter.eventNames().length,
+      0,
+      'Nothing is re-subscribed on the server',
+    )
+    t.end()
+  })
+
   test('Non-string methods / props are not supported', (t) => {
     const { client } = setup(t, myApi)
     // @ts-expect-error
@@ -947,4 +1139,9 @@ function whenServerSubscribed(emitter, eventName, fn) {
     emitter.removeListener('newListener', onAdd)
     process.nextTick(fn)
   })
+}
+
+/** @param {number} ms */
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
