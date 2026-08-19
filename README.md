@@ -106,6 +106,22 @@ The returned `clientApi` will be correctly typed, with synchronous functions con
 
 The static method `close()` will remove all event listeners from the `channel` used to create the client. It will not close or destroy the MessagePort used as the `channel`.
 
+### `createClient.rejectPending(clientApi, error)`
+
+Rejects every in-flight method call with `error` and returns the number of calls rejected. Use this when the transport to the server has dropped (e.g. the process hosting the server was killed) and pending calls can never be answered — without it they would hang until `options.timeout`. Unlike `close()`, the client remains fully usable afterwards: new calls can be made and event listeners stay registered. A response arriving later for a rejected call is ignored.
+
+Note that a rejected call may still have executed on the server if the request was delivered before the transport dropped — whether it is safe to retry is the caller's judgement (reads generally are; mutations need care).
+
+No-op returning `0` if nothing is pending or the client is closed.
+
+### `createClient.resubscribe(clientApi)`
+
+Re-sends a subscription message to the server for every event — including events on nested sub-objects — that currently has at least one listener, and returns the number of subscription messages sent. Use this after the server has restarted: a restarted server has lost its subscription state, so it will not emit events until the client re-subscribes. Safe to call repeatedly — the server ignores duplicate subscriptions, so events are not double-delivered.
+
+Only call this once the transport to the restarted server is connected again. Subscription messages written into a down transport are lost, and on some transports each write triggers a reconnect attempt, which can keep the transport busy while the server is still down.
+
+No-op returning `0` if the client is closed.
+
 ### Errors
 
 The client can reject a call with one of the following error classes. Each carries a stable `.code` property so consumers can identify it without matching against the error message. Both are exported from the package and can also be checked with `instanceof`.
