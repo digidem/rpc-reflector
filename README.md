@@ -88,7 +88,7 @@ If `channel` is a MessagePort you will need to manually call [`port.start()`](ht
 
 Instead of a handler object, `createServer` accepts a factory function `() => api | Promise<api>`. The server then treats the channel and its event subscriptions as durable, and the handler as a replaceable plug-in: clients keep calling methods and stay subscribed to events on a stable channel, while the object that actually serves them can be released and recreated behind it (e.g. a backend that is torn down when idle and rebuilt on demand).
 
-The factory is invoked lazily: when the first message that needs a handler arrives — a method call, or an event subscription — or when `ensureHandler()` is called. Concurrent triggers share a single factory invocation. Messages that arrive while no handler is bound wait for the bind, and the server re-attaches every existing event subscription to the new handler _before_ dispatching the waiting messages, so an event caused by the very first call on a fresh handler cannot be missed. Unsubscribing from an event never invokes the factory. If the factory rejects, each waiting call rejects with that error (its `code` is preserved) and the failure is not cached — the next call retries the factory. If the factory returns the object that is already bound, nothing is re-attached.
+The factory is invoked lazily: when the first message that needs a handler arrives — a method call, or an event subscription — or when `ensureHandler()` is called. Concurrent triggers share a single factory invocation. Messages that arrive while no handler is bound wait for the bind, and the server re-attaches every existing event subscription to the new handler _before_ dispatching the waiting messages, so an event caused by the very first call on a fresh handler cannot be missed. Unsubscribing from an event never invokes the factory. If the factory rejects, each waiting call rejects with that error (its `code` is preserved) and the failure is not cached — the next call retries the factory; a waiting subscription stays in the registry and is attached on the next successful bind. Across a detach/re-bind cycle — even when the factory returns the same object again — listeners are removed on detach and re-attached on bind, always in pairs, so they never accumulate. The factory should always settle: while it neither resolves nor rejects, the server retains the messages awaiting the bind indefinitely — clients will time out, but the server-side closures persist until the factory settles.
 
 The server object has two methods for managing the handler lifecycle (on a server created with a static handler object they are a no-op and an immediate resolve, respectively):
 
@@ -96,6 +96,8 @@ The server object has two methods for managing the handler lifecycle (on a serve
 - `ensureHandler()`: returns a promise that resolves once a handler is bound and the subscription registry is attached to it, invoking the factory if needed; rejects if the factory rejects. Resolves immediately if a handler is already bound.
 
 A streamed response that is in flight when `detachHandler()` is called runs to completion (or error) against the old handler — it is not cancelled, so the old handler is only released once its in-flight streams end.
+
+A call still awaiting a bind when the server is closed is answered with an error response (code `RPC_CHANNEL_CLOSED`) once the pending factory invocation settles, rather than being left to time out.
 
 ### `const clientApi = createClient(channel, [options])`
 

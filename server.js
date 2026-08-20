@@ -10,6 +10,7 @@ import { isMessagePortLike } from './lib/is-message-port-like.js'
 import { EventEmitter } from 'events'
 import ensureError from 'ensure-error'
 import { isMessageEvent } from './lib/is-message-event.js'
+import { ChannelClosedError } from './lib/errors.js'
 
 /** @import {MsgRequestObj, Result, Metadata, MsgId} from './lib/types.js'*/
 /** @typedef {import('./lib/types.js').MsgRequest} MsgRequest */
@@ -184,19 +185,26 @@ export function createServer(
     if (!boundHandler) {
       const resultPromise = awaitBind().then(
         () => {
-          if (closed) return
+          if (closed) {
+            // The server closed while this request awaited the bind: respond
+            // with an error rather than leaving the client to time out.
+            send([
+              msgType.RESPONSE,
+              msgId,
+              serializeError(new ChannelClosedError()),
+            ])
+            return
+          }
           // Re-checks the bound state, so if the bind completed under a stale
           // epoch (detached mid-bind) this triggers a fresh bind.
           return handleRequest(request)
         },
         (bindError) => {
-          if (!closed) {
-            send([
-              msgType.RESPONSE,
-              msgId,
-              serializeError(ensureError(bindError)),
-            ])
-          }
+          send([
+            msgType.RESPONSE,
+            msgId,
+            serializeError(ensureError(bindError)),
+          ])
           throw bindError
         },
       )
@@ -252,33 +260,7 @@ export function createServer(
   }
 
   /** @param {MsgOn} msg */
-  function handleOn(msg) {
-    const [, eventName, propArray] = msg
-    if (!boundHandler) {
-      awaitBind().then(
-        () => {
-          if (closed) return
-          handleOn(msg)
-        },
-        (err) => {
-          log.warn(
-            { err, eventName, propArray },
-            'Error subscribing to event (ignored)',
-          )
-        },
-      )
-      return
-    }
-    let emitter
-    try {
-      emitter = getNestedEventEmitter(boundHandler, propArray)
-    } catch (err) {
-      log.warn(
-        { err, eventName, propArray },
-        'Error subscribing to event (ignored)',
-      )
-      return
-    }
+  function handleOn([, eventName, propArray]) {
     const encodedEventName = stringify(propArray, eventName)
 
     // If we are already emitting for this event, we can ignore
@@ -292,22 +274,51 @@ export function createServer(
         send([msgType.EMIT, eventName, propArray, null, args])
       }
     }
+    // Registry-first: the listener captures nothing from the handler, so it
+    // can be registered while unbound and attached by the bind's registry
+    // walk. This keeps ON/OFF ordering exact while a bind is in flight, and
+    // subscription intent survives a factory rejection.
     subscriptions.set(encodedEventName, listener)
-    emitter.on(eventName, listener)
+
+    if (!boundHandler) {
+      awaitBind().catch((err) => {
+        log.warn(
+          { err, eventName, propArray },
+          'Error binding handler (subscription retained)',
+        )
+      })
+      return
+    }
+    try {
+      getNestedEventEmitter(boundHandler, propArray).on(eventName, listener)
+    } catch (err) {
+      log.warn(
+        { err, eventName, propArray },
+        'Error subscribing to event (ignored)',
+      )
+      return
+    }
     log.debug({ eventName, propArray }, 'Subscribed to handler event')
   }
 
   /** @param {MsgOff} msg */
   function handleOff([, eventName, propArray]) {
-    if (!boundHandler) {
-      // Unsubscribing only expresses lack of interest, so it must not invoke
-      // the handler factory: remove from the registry only.
-      subscriptions.delete(stringify(propArray, eventName))
-      return
-    }
-    let emitter
+    const encodedEventName = stringify(propArray, eventName)
+
+    // Fail silently if there is nothing to unsubscribe
+    const listener = subscriptions.get(encodedEventName)
+    if (!listener) return
+    // Delete before the emitter lookup: the unsubscribe must stick even when
+    // the current handler lacks the emitter, or a later rebind would
+    // resurrect the subscription. Unsubscribing must not invoke the handler
+    // factory, so while unbound this is registry-only.
+    subscriptions.delete(encodedEventName)
+    if (!boundHandler) return
     try {
-      emitter = getNestedEventEmitter(boundHandler, propArray)
+      getNestedEventEmitter(boundHandler, propArray).removeListener(
+        eventName,
+        listener,
+      )
     } catch (err) {
       log.warn(
         { err, eventName, propArray },
@@ -315,15 +326,6 @@ export function createServer(
       )
       return
     }
-
-    const encodedEventName = stringify(propArray, eventName)
-
-    // Fail silently if there is nothing to unsubscribe
-    if (!subscriptions.has(encodedEventName)) return
-
-    const listener = subscriptions.get(encodedEventName)
-    listener && emitter.removeListener(eventName, listener)
-    subscriptions.delete(encodedEventName)
     log.debug({ eventName, propArray }, 'Unsubscribed from handler event')
   }
 
@@ -357,10 +359,14 @@ export function createServer(
     return bindPromise
   }
 
-  /** @param {Handler} nextHandler */
+  /**
+   * Only ever called while unbound: binds start only when no handler is bound
+   * (single-flight), and a detach mid-bind bumps the epoch so the stale bind
+   * never reaches here.
+   *
+   * @param {Handler} nextHandler
+   */
   function bindHandler(nextHandler) {
-    if (nextHandler === boundHandler) return
-    if (boundHandler) detachAllListeners(boundHandler)
     boundHandler = nextHandler
     // Attach the subscription registry before any awaited message is
     // dispatched, so an event caused by the first call on a fresh handler

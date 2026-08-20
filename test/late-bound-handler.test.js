@@ -238,23 +238,21 @@ test('Late-bound: factory rejection rejects awaited calls and is retried', async
   t.end()
 })
 
-test('Late-bound: awaited subscribe is dropped with a warning when the factory rejects', async (t) => {
-  t.plan(2)
+test('Late-bound: subscription is retained when the factory rejects', async (t) => {
+  const api = createEmitterApi('A')
+  let shouldFail = true
   let factoryCalls = 0
+  /** @type {unknown[]} */
+  const warnings = []
   const logger = createTestLogger({
-    warn(_obj, msg) {
-      t.equal(
-        msg,
-        'Error subscribing to event (ignored)',
-        'Dropped subscribe is logged',
-      )
-    },
+    warn: (_obj, msg) => warnings.push(msg),
   })
   const serverPort = new MessagePortLike(() => {})
   const server = createServer(
     async () => {
       factoryCalls++
-      throw new Error('FactoryError')
+      if (shouldFail) throw new Error('FactoryError')
+      return api
     },
     serverPort,
     { logger },
@@ -266,6 +264,42 @@ test('Late-bound: awaited subscribe is dropped with a warning when the factory r
   )
   await delay(10)
   t.equal(factoryCalls, 1, 'Factory was invoked by the subscribe')
+  t.deepEqual(
+    warnings,
+    ['Error binding handler (subscription retained)'],
+    'Failed bind is logged',
+  )
+
+  shouldFail = false
+  await server.ensureHandler()
+  t.equal(
+    api.listenerCount('changed'),
+    1,
+    'Subscription intent survives the rejection and attaches on the next successful bind',
+  )
+  t.end()
+})
+
+test('Late-bound: subscribe then unsubscribe while unbound leaves no subscription', async (t) => {
+  const api = createEmitterApi('A')
+  let factoryCalls = 0
+  const { client, server } = setup(t, async () => {
+    factoryCalls++
+    await delay(10)
+    return api
+  })
+
+  const listener = () => {}
+  client.on('changed', listener)
+  client.off('changed', listener)
+  await server.ensureHandler()
+  t.equal(factoryCalls, 1, 'Factory invoked once (by the subscribe)')
+  t.equal(
+    api.listenerCount('changed'),
+    0,
+    'ON then OFF within the unbound window attaches nothing after bind',
+  )
+  t.end()
 })
 
 test('Late-bound: re-attach failure on the new handler is logged and ignored', async (t) => {
@@ -300,6 +334,63 @@ test('Late-bound: re-attach failure on the new handler is logged and ignored', a
     await client.whoami(),
     'B',
     'Calls still work on a handler without the emitter',
+  )
+  t.end()
+})
+
+test('Late-bound: unsubscribe sticks when the current handler lacks the emitter', async (t) => {
+  const apiA = createEmitterApi('A')
+  const notAnEmitter = { whoami: () => 'B' }
+  /** @type {import('../server.js').Handler} */
+  let current = apiA
+  const { client, server } = setup(t, () => current)
+
+  const listener = () => {}
+  client.on('changed', listener)
+  await client.whoami()
+  t.equal(apiA.listenerCount('changed'), 1, 'Subscribed on handler A')
+
+  server.detachHandler()
+  current = notAnEmitter
+  await server.ensureHandler()
+  // The unsubscribe arrives while the bound handler has no emitter for the
+  // event: it must still remove the registry entry, or a later rebind to A
+  // would resurrect a subscription the client no longer has.
+  client.off('changed', listener)
+
+  server.detachHandler()
+  current = apiA
+  await server.ensureHandler()
+  t.equal(
+    apiA.listenerCount('changed'),
+    0,
+    'Unsubscribed event is not resurrected on a later rebind',
+  )
+  t.end()
+})
+
+test('Late-bound: registry re-attach lands before the first call on a fresh handler', async (t) => {
+  const api = createEmitterApi('A')
+  const { client, server } = setup(t, async () => {
+    await delay(10)
+    return api
+  })
+
+  /** @type {string[]} */
+  const received = []
+  client.on('changed', (value) => received.push(value))
+  await client.whoami()
+  server.detachHandler()
+
+  // The first call on the fresh handler emits synchronously during its
+  // execution: it is only delivered if the bind's registry walk re-attached
+  // the subscription before dispatching the awaited call.
+  await client.mutate('after rebind')
+  await delay(0)
+  t.deepEqual(
+    received,
+    ['after rebind'],
+    'Event emitted synchronously during the first call after rebind is delivered',
   )
   t.end()
 })
@@ -387,7 +478,65 @@ test('Late-bound: detach during a pending bind discards the stale bind', async (
   t.end()
 })
 
-test('Late-bound: factory returning the same object never re-attaches', async (t) => {
+test('Late-bound: close() during a pending bind responds to awaited calls', async (t) => {
+  /** @type {(api: ReturnType<typeof createEmitterApi>) => void} */
+  let resolveFactory = () => {}
+  const { client, server } = setup(
+    t,
+    () =>
+      new Promise((resolve) => {
+        resolveFactory = resolve
+      }),
+  )
+
+  const pendingCall = client.whoami()
+  await delay(0)
+  server.close()
+  resolveFactory(createEmitterApi('A'))
+
+  try {
+    await pendingCall
+    t.fail('Expected rejection')
+  } catch (err) {
+    t.equal(
+      /** @type {any} */ (err).code,
+      'RPC_CHANNEL_CLOSED',
+      'Awaited call rejects with RPC_CHANNEL_CLOSED instead of timing out',
+    )
+  }
+  t.end()
+})
+
+test('Late-bound: close() during a pending bind that rejects responds with the factory error', async (t) => {
+  /** @type {(err: Error) => void} */
+  let rejectFactory = () => {}
+  const { client, server } = setup(
+    t,
+    () =>
+      new Promise((_resolve, reject) => {
+        rejectFactory = reject
+      }),
+  )
+
+  const pendingCall = client.whoami()
+  await delay(0)
+  server.close()
+  rejectFactory(Object.assign(new Error('FactoryError'), { code: 'EFACTORY' }))
+
+  try {
+    await pendingCall
+    t.fail('Expected rejection')
+  } catch (err) {
+    t.equal(
+      /** @type {any} */ (err).code,
+      'EFACTORY',
+      'Awaited call rejects with the factory error',
+    )
+  }
+  t.end()
+})
+
+test('Late-bound: rebinding the same object pairs every attach with a detach', async (t) => {
   const api = createEmitterApi('A')
   let onCalls = 0
   const originalOn = api.on.bind(api)
@@ -411,12 +560,12 @@ test('Late-bound: factory returning the same object never re-attaches', async (t
   t.equal(factoryCalls, 1, 'Factory not re-invoked while bound')
   t.equal(onCalls, 1, 'No re-attach while the same handler stays bound')
 
-  // Detach/re-bind cycles with the same object must pair every attach with a
-  // detach so listeners never accumulate.
+  // Each detach removes the listeners the previous bind attached, so
+  // re-binding the same object never accumulates listeners.
   for (let i = 0; i < 3; i++) {
     server.detachHandler()
     await server.ensureHandler()
-    t.equal(api.listenerCount('changed'), 1, 'Listeners do not accumulate')
+    t.equal(api.listenerCount('changed'), 1, 'Listener count never exceeds 1')
   }
   t.equal(factoryCalls, 4, 'Factory invoked once per re-bind')
   t.end()
