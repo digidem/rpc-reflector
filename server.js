@@ -7,7 +7,7 @@ import { validateMetadata, validateRequestMsg } from './lib/validate-message.js'
 import { parse, stringify } from './lib/prop-array-utils.js'
 import { MessageStream } from './lib/message-stream.js'
 import { isMessagePortLike } from './lib/is-message-port-like.js'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import ensureError from 'ensure-error'
 import { isMessageEvent } from './lib/is-message-event.js'
 import { ChannelClosedError } from './lib/errors.js'
@@ -488,7 +488,7 @@ function getNestedEventEmitter(target, propArray) {
     }
     nested = nested[propertyKey]
   }
-  if (!(nested instanceof EventEmitter)) {
+  if (!isEventEmitterLike(nested)) {
     throw new TypeError(
       `${
         propArray.length === 0 ? '[target]' : propArray[propArray.length - 1]
@@ -496,5 +496,24 @@ function getNestedEventEmitter(target, propArray) {
     )
   }
   return nested
+}
+
+/**
+ * A handler built against a different copy of the events module (e.g. the npm
+ * `events` shim pulled in by a bundler, or a second node_modules tree) fails
+ * `instanceof`, so fall back to duck-typing the methods the server uses.
+ *
+ * @param {unknown} candidate
+ * @returns {candidate is EventEmitter}
+ */
+function isEventEmitterLike(candidate) {
+  if (candidate instanceof EventEmitter) return true
+  if (typeof candidate !== 'object' || candidate === null) return false
+  const emitter = /** @type {{[propertyKey: string]: unknown}} */ (candidate)
+  return (
+    typeof emitter.on === 'function' &&
+    typeof emitter.removeListener === 'function' &&
+    typeof emitter.emit === 'function'
+  )
 }
 function noop() {}

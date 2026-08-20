@@ -1,7 +1,7 @@
 // @ts-check
 import test from 'tape'
 import { createClient, createServer, TimeoutError } from '../index.js'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import { EventEmitter as EventEmitter3 } from 'eventemitter3'
 import { readFileSync, createReadStream } from 'fs'
 import { join } from 'path'

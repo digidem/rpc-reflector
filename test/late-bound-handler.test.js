@@ -1,6 +1,6 @@
 // @ts-check
 import test from 'tape'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 
 import { createClient, createServer } from '../index.js'
 import { msgType } from '../lib/constants.js'
