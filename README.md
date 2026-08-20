@@ -67,9 +67,9 @@ const myApiOnClient =
 
 ## API
 
-### `const { close } = createServer(api, channel, [options])`
+### `const { close, detachHandler, ensureHandler } = createServer(api, channel, [options])`
 
-`api` can be any object with any properties, methods and events that you want reflected in the client API.
+`api` can be any object with any properties, methods and events that you want reflected in the client API. It can also be a factory function that returns (or resolves to) such an object — see [Late-bound handlers](#late-bound-handlers).
 
 `channel` can be a browser [MessagePort](http://developer.mozilla.org/en-US/docs/Web/API/MessagePort), a Node [Worker MessagePort](https://nodejs.org/api/worker_threads.html#worker_threads_class_messageport) or a MessagePort-like object that defines a `postMessage()` method and `addEventListener('message', ...)` / `removeEventListener('message', ...)` methods. The listener is called with a `MessageEvent`-like object, i.e. an object with the message on its `data` property.
 
@@ -80,7 +80,22 @@ If `channel` is a MessagePort you will need to manually call [`port.start()`](ht
 - `logger`: An instance of Pino Logger or a compatible logger. If not provided, no logging will be done.
 - `onRequestHook: (request: MsgRequestObj, next: (request: MsgRequestObj) => Promise<any>) => void` Optional hook to observe and modify a request and its metadata, and to await the response.
 
-`close()` is used to remove event listeners from the channel. It will not close or destroy the MessagePort used as the `channel`.
+`close()` is used to remove event listeners from the channel. It will not close or destroy the MessagePort used as the `channel`. For a server created with a handler factory it also detaches from the current handler and clears the subscription registry.
+
+`detachHandler()` and `ensureHandler()` are no-ops unless the server was created with a handler factory — see [Late-bound handlers](#late-bound-handlers).
+
+### Late-bound handlers
+
+Instead of a handler object, `createServer` accepts a factory function `() => api | Promise<api>`. The server then treats the channel and its event subscriptions as durable, and the handler as a replaceable plug-in: clients keep calling methods and stay subscribed to events on a stable channel, while the object that actually serves them can be released and recreated behind it (e.g. a backend that is torn down when idle and rebuilt on demand).
+
+The factory is invoked lazily: when the first message that needs a handler arrives — a method call, or an event subscription — or when `ensureHandler()` is called. Concurrent triggers share a single factory invocation. Messages that arrive while no handler is bound wait for the bind, and the server re-attaches every existing event subscription to the new handler _before_ dispatching the waiting messages, so an event caused by the very first call on a fresh handler cannot be missed. Unsubscribing from an event never invokes the factory. If the factory rejects, each waiting call rejects with that error (its `code` is preserved) and the failure is not cached — the next call retries the factory. If the factory returns the object that is already bound, nothing is re-attached.
+
+The server object has two methods for managing the handler lifecycle (on a server created with a static handler object they are a no-op and an immediate resolve, respectively):
+
+- `detachHandler()`: removes every listener the server attached to the current handler's emitters and releases the handler reference so it can be garbage collected. The subscription registry is kept, so when a handler is next bound the same subscriptions are re-attached to it. Idempotent.
+- `ensureHandler()`: returns a promise that resolves once a handler is bound and the subscription registry is attached to it, invoking the factory if needed; rejects if the factory rejects. Resolves immediately if a handler is already bound.
+
+A streamed response that is in flight when `detachHandler()` is called runs to completion (or error) against the old handler — it is not cancelled, so the old handler is only released once its in-flight streams end.
 
 ### `const clientApi = createClient(channel, [options])`
 
