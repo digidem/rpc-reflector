@@ -1,5 +1,5 @@
 import type { ErrorObject } from 'serialize-error'
-import type { EventEmitter } from 'events'
+import type { EventEmitter } from 'node:events'
 import type { Readable } from 'stream'
 
 import type { msgType } from './constants.js'

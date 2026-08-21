@@ -7,9 +7,10 @@ import { validateMetadata, validateRequestMsg } from './lib/validate-message.js'
 import { parse, stringify } from './lib/prop-array-utils.js'
 import { MessageStream } from './lib/message-stream.js'
 import { isMessagePortLike } from './lib/is-message-port-like.js'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 import ensureError from 'ensure-error'
 import { isMessageEvent } from './lib/is-message-event.js'
+import { ChannelClosedError } from './lib/errors.js'
 
 /** @import {MsgRequestObj, Result, Metadata, MsgId} from './lib/types.js'*/
 /** @typedef {import('./lib/types.js').MsgRequest} MsgRequest */
@@ -23,10 +24,18 @@ import { isMessageEvent } from './lib/is-message-event.js'
 /** @typedef {import('./lib/types.js').MessageEvent} MessageEvent */
 /** @typedef {(request: MsgRequestObj, next: (request: Omit<MsgRequestObj, 'metadata'>) => Result) => void} OnRequestHook */
 /** @typedef {import('./lib/types.js').Logger} Logger */
+/** @typedef {{[method: string]: any}} Handler */
+/** @typedef {() => Handler | Promise<Handler>} HandlerFactory */
 /**
  * @typedef {object} ServerOptions
  * @property {false | Logger} [logger = false] options.logger Set to `false` to disable logging, or pass a logger (e.g. a pino instance or the global `console`) to enable it
  * @property {OnRequestHook} [onRequestHook] Optional hook to observe and modify a request and its metadata, and to await the response.
+ */
+/**
+ * @typedef {object} Server
+ * @property {() => void} close Stop the server listening to and sending any more messages. For a server created with a handler factory this also detaches from the current handler and clears the subscription registry.
+ * @property {() => void} detachHandler Remove every listener the server attached to the current handler's emitters and release the handler reference, keeping the subscription registry so a later bind re-attaches it. Idempotent; no-op for a server created with a static handler.
+ * @property {() => Promise<void>} ensureHandler Resolves once a handler is bound and the subscription registry is attached to it, invoking the handler factory if needed; rejects if the factory rejects. Resolves immediately for a server created with a static handler.
  */
 
 /**
@@ -34,25 +43,41 @@ import { isMessageEvent } from './lib/is-message-event.js'
  * Create an RPC server that will receive messages via `receiver`, call the
  * matching method on `handler`, and send the reply via `send`.
  *
- * @param {{[method: string]: any}} handler Any method called on the client
+ * @param {Handler | HandlerFactory} handler Any method called on the client
  * object will be called on this object. Methods can return a value, a Promise,
  * or a ReadableStream. Your transport stream must be able to encode/decode any
- * values that your handler returns
+ * values that your handler returns. Pass a function to bind the handler
+ * lazily: it is invoked (once, shared across concurrent triggers) when the
+ * first message needing a handler arrives, or when `ensureHandler()` is
+ * called, and may return the handler or a promise of it.
  * @param {MessagePortLike} messagePort A MessagePort-like object that must implement an `.addEventListener('message', (event: MessageEvent) => void)` event handler and a `.postMessage()` method.
  * @param {ServerOptions} [options] Options object
- * @returns {{ close: () => void }} An object with a single method `close()` that will stop the server listening to and sending any more messages
+ * @returns {Server}
  */
 export function createServer(
   handler,
   messagePort,
   { logger = false, onRequestHook } = {},
 ) {
-  invariant(typeof handler === 'object', 'Missing handler object.')
+  invariant(
+    typeof handler === 'object' || typeof handler === 'function',
+    'Missing handler object or factory.',
+  )
   const log = logger || nullLogger
   invariant(
     isMessagePortLike(messagePort),
     'Must pass a MessagePort-like object',
   )
+
+  const createHandler = typeof handler === 'function' ? handler : null
+  /** @type {Handler | null} */
+  let boundHandler = typeof handler === 'function' ? null : handler
+  /** @type {Promise<void> | null} */
+  let bindPromise = null
+  // Bumped by detachHandler() and close(); a bind that completes under a stale
+  // epoch discards its result so it cannot resurrect a detached handler.
+  let bindEpoch = 0
+  let closed = false
 
   /** @type {Map<string, (...args: any[]) => void>} */
   let subscriptions = new Map()
@@ -155,10 +180,40 @@ export function createServer(
    * @param {MsgRequestObj} request
    * @returns {Result}
    */
-  function handleRequest({ msgId, method, args }) {
+  function handleRequest(request) {
+    const { msgId, method, args } = request
+    if (!boundHandler) {
+      const resultPromise = awaitBind().then(
+        () => {
+          if (closed) {
+            // The server closed while this request awaited the bind: respond
+            // with an error rather than leaving the client to time out.
+            send([
+              msgType.RESPONSE,
+              msgId,
+              serializeError(new ChannelClosedError()),
+            ])
+            return
+          }
+          // Re-checks the bound state, so if the bind completed under a stale
+          // epoch (detached mid-bind) this triggers a fresh bind.
+          return handleRequest(request)
+        },
+        (bindError) => {
+          send([
+            msgType.RESPONSE,
+            msgId,
+            serializeError(ensureError(bindError)),
+          ])
+          throw bindError
+        },
+      )
+      resultPromise.catch(noop)
+      return resultPromise
+    }
     let syncResult
     try {
-      syncResult = applyNestedMethod(handler, method, args)
+      syncResult = applyNestedMethod(boundHandler, method, args)
     } catch (error) {
       send([msgType.RESPONSE, msgId, serializeError(ensureError(error))])
       const resultPromise = Promise.reject(error)
@@ -206,16 +261,6 @@ export function createServer(
 
   /** @param {MsgOn} msg */
   function handleOn([, eventName, propArray]) {
-    let emitter
-    try {
-      emitter = getNestedEventEmitter(handler, propArray)
-    } catch (err) {
-      log.warn(
-        { err, eventName, propArray },
-        'Error subscribing to event (ignored)',
-      )
-      return
-    }
     const encodedEventName = stringify(propArray, eventName)
 
     // If we are already emitting for this event, we can ignore
@@ -229,16 +274,51 @@ export function createServer(
         send([msgType.EMIT, eventName, propArray, null, args])
       }
     }
+    // Registry-first: the listener captures nothing from the handler, so it
+    // can be registered while unbound and attached by the bind's registry
+    // walk. This keeps ON/OFF ordering exact while a bind is in flight, and
+    // subscription intent survives a factory rejection.
     subscriptions.set(encodedEventName, listener)
-    emitter.on(eventName, listener)
+
+    if (!boundHandler) {
+      awaitBind().catch((err) => {
+        log.warn(
+          { err, eventName, propArray },
+          'Error binding handler (subscription retained)',
+        )
+      })
+      return
+    }
+    try {
+      getNestedEventEmitter(boundHandler, propArray).on(eventName, listener)
+    } catch (err) {
+      log.warn(
+        { err, eventName, propArray },
+        'Error subscribing to event (ignored)',
+      )
+      return
+    }
     log.debug({ eventName, propArray }, 'Subscribed to handler event')
   }
 
   /** @param {MsgOff} msg */
   function handleOff([, eventName, propArray]) {
-    let emitter
+    const encodedEventName = stringify(propArray, eventName)
+
+    // Fail silently if there is nothing to unsubscribe
+    const listener = subscriptions.get(encodedEventName)
+    if (!listener) return
+    // Delete before the emitter lookup: the unsubscribe must stick even when
+    // the current handler lacks the emitter, or a later rebind would
+    // resurrect the subscription. Unsubscribing must not invoke the handler
+    // factory, so while unbound this is registry-only.
+    subscriptions.delete(encodedEventName)
+    if (!boundHandler) return
     try {
-      emitter = getNestedEventEmitter(handler, propArray)
+      getNestedEventEmitter(boundHandler, propArray).removeListener(
+        eventName,
+        listener,
+      )
     } catch (err) {
       log.warn(
         { err, eventName, propArray },
@@ -246,34 +326,112 @@ export function createServer(
       )
       return
     }
-
-    const encodedEventName = stringify(propArray, eventName)
-
-    // Fail silently if there is nothing to unsubscribe
-    if (!subscriptions.has(encodedEventName)) return
-
-    const listener = subscriptions.get(encodedEventName)
-    listener && emitter.removeListener(eventName, listener)
-    subscriptions.delete(encodedEventName)
     log.debug({ eventName, propArray }, 'Unsubscribed from handler event')
+  }
+
+  /**
+   * Single-flight bind: invoke the handler factory (sharing one invocation
+   * across concurrent triggers) and bind its result. A rejection is not
+   * cached — the next trigger retries the factory.
+   *
+   * @returns {Promise<void>}
+   */
+  function awaitBind() {
+    if (bindPromise) return bindPromise
+    const epoch = bindEpoch
+    bindPromise = Promise.resolve()
+      .then(/** @type {HandlerFactory} */ (createHandler))
+      .then(
+        (nextHandler) => {
+          bindPromise = null
+          if (epoch !== bindEpoch) return
+          invariant(
+            typeof nextHandler === 'object' && nextHandler !== null,
+            'Handler factory must return an object.',
+          )
+          bindHandler(nextHandler)
+        },
+        (err) => {
+          bindPromise = null
+          throw err
+        },
+      )
+    return bindPromise
+  }
+
+  /**
+   * Only ever called while unbound: binds start only when no handler is bound
+   * (single-flight), and a detach mid-bind bumps the epoch so the stale bind
+   * never reaches here.
+   *
+   * @param {Handler} nextHandler
+   */
+  function bindHandler(nextHandler) {
+    boundHandler = nextHandler
+    // Attach the subscription registry before any awaited message is
+    // dispatched, so an event caused by the first call on a fresh handler
+    // cannot be missed.
+    for (const [encodedEventName, listener] of subscriptions.entries()) {
+      const [propArray, eventName] = parse(encodedEventName)
+      try {
+        getNestedEventEmitter(nextHandler, propArray).on(eventName, listener)
+      } catch (err) {
+        log.warn(
+          { err, eventName, propArray },
+          'Error subscribing to event (ignored)',
+        )
+      }
+    }
+    log.debug(
+      { subscriptionCount: subscriptions.size },
+      'RPC server bound to handler',
+    )
+  }
+
+  /** @param {Handler} fromHandler */
+  function detachAllListeners(fromHandler) {
+    for (const [encodedEventName, listener] of subscriptions.entries()) {
+      const [propArray, eventName] = parse(encodedEventName)
+      try {
+        const emitter = getNestedEventEmitter(fromHandler, propArray)
+        emitter.removeListener(eventName, listener)
+      } catch {
+        // No-op if error removing event listener
+      }
+    }
+  }
+
+  function detachHandler() {
+    if (!createHandler) return
+    bindEpoch++
+    if (!boundHandler) return
+    detachAllListeners(boundHandler)
+    boundHandler = null
+    log.debug('RPC server detached from handler')
+  }
+
+  async function ensureHandler() {
+    if (!createHandler || closed) return
+    // Loop because a bind can complete under a stale epoch (detached
+    // mid-bind), leaving the server unbound.
+    while (!boundHandler && !closed) {
+      await awaitBind()
+    }
   }
 
   return {
     close: () => {
+      closed = true
+      bindEpoch++
       messagePort.removeEventListener('message', handleMessageEvent)
       const subscriptionCount = subscriptions.size
-      for (const [encodedEventName, listener] of subscriptions.entries()) {
-        const [propArray, eventName] = parse(encodedEventName)
-        try {
-          const emitter = getNestedEventEmitter(handler, propArray)
-          emitter.removeListener(eventName, listener)
-        } catch {
-          // No-op if error removing event listener
-        }
-      }
+      if (boundHandler) detachAllListeners(boundHandler)
+      if (createHandler) boundHandler = null
       subscriptions = new Map()
       log.info({ subscriptionCount }, 'RPC server closed')
     },
+    detachHandler,
+    ensureHandler,
   }
 }
 
@@ -330,7 +488,7 @@ function getNestedEventEmitter(target, propArray) {
     }
     nested = nested[propertyKey]
   }
-  if (!(nested instanceof EventEmitter)) {
+  if (!isEventEmitterLike(nested)) {
     throw new TypeError(
       `${
         propArray.length === 0 ? '[target]' : propArray[propArray.length - 1]
@@ -338,5 +496,24 @@ function getNestedEventEmitter(target, propArray) {
     )
   }
   return nested
+}
+
+/**
+ * A handler built against a different copy of the events module (e.g. the npm
+ * `events` shim pulled in by a bundler, or a second node_modules tree) fails
+ * `instanceof`, so fall back to duck-typing the methods the server uses.
+ *
+ * @param {unknown} candidate
+ * @returns {candidate is EventEmitter}
+ */
+function isEventEmitterLike(candidate) {
+  if (candidate instanceof EventEmitter) return true
+  if (typeof candidate !== 'object' || candidate === null) return false
+  const emitter = /** @type {{[propertyKey: string]: unknown}} */ (candidate)
+  return (
+    typeof emitter.on === 'function' &&
+    typeof emitter.removeListener === 'function' &&
+    typeof emitter.emit === 'function'
+  )
 }
 function noop() {}

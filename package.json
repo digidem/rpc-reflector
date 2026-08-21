@@ -29,7 +29,7 @@
     "type": "tsc",
     "format": "prettier --write .",
     "lint": "eslint --cache .",
-    "prepare": "husky",
+    "prepare": "husky && npm run build:types",
     "build:types": "rimraf \"dist/\" && tsc -p tsconfig.publish.json",
     "prepack": "npm run build:types"
   },
